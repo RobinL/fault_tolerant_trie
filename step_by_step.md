@@ -158,9 +158,9 @@ We still **do not** add fuzzy matches in this step—keeps the change small.
 
 ---
 
-### Step 6 — Add tiny **fuzzy consume** (Damerau–Levenshtein ≤ 1)
+### [x] Step 6 — Add tiny **fuzzy consume** (Damerau–Levenshtein ≤ 1)
 
-**What:** If no exact child for `t[i-1]`, allow stepping into a child whose label is within DL distance 1 from the token; cost +1.
+**What:** If no exact child for `t[i-1]`, allow stepping into a child whose label is within DL distance 1 from the token; cost +1. Log the specific edit type (`substitution` / `transpose` / `insert` / `delete`).
 
 **Change (`matcher_stage1.py`):**
 
@@ -169,10 +169,12 @@ We still **do not** add fuzzy matches in this step—keeps the change small.
 
   * Loop over all `node.children` and if `DL≤1`, enqueue `(cost+1, child, i-1, exact_hits, saw_numeric or is_numeric(child_label))`.
 
-**Verify:**
+**Verify (toy + guards):**
 
-* Create canonical `"HAYDN PARK ROAD"` and messy `"HADYN PARK ROAD"` within a toy trie; fuzzy should bridge `HADYN`↔`HAYDN` with cost 1 and still accept if unique and numeric present.
-* Ensure fuzz is only used when no exact child exists for that token (keeps paths stable).
+* Canonical: `12 HAYDN PARK ROAD`; messy: `12 HADYN PARK ROAD` → fuzzy `transpose`, cost 1, accepted (numeric present, exact hits sufficient).
+* Canonical: `10 HAYDN PARK ROAD`; messy: `10 HAYEN PARK ROAD` → fuzzy `substitution`, cost 1, accepted.
+* Messy without numeric: `HADYN PARK ROAD` → rejected (numeric guard on by default).
+* Fuzzy is only considered when there is no exact child for that token (keeps paths stable), and does not increment `exact_hits`.
 
 ---
 
