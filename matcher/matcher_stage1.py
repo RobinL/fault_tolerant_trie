@@ -263,6 +263,7 @@ def match_stage1_with_skips(
     max_cost: int = 2,
     min_exact_hits: int = 2,
     require_numeric: bool = True,
+    numeric_must_be_exact: bool = True,
     skip_redundant_ratio: float = 2.0,
     accept_terminal_if_exhausted: bool = True,
     debug: Optional[Callable[[str], None]] = None,
@@ -330,42 +331,47 @@ def match_stage1_with_skips(
             return 0
         return 1
 
-    # (cost, seq, node, i, exact_hits, saw_numeric)
-    heap: list[tuple[int, int, TrieNode, int, int, bool]] = []
+    # (cost, seq, node, i, exact_hits, saw_numeric_any, saw_numeric_exact)
+    heap: list[tuple[int, int, TrieNode, int, int, bool, bool]] = []
     seq = 0
-    heapq.heappush(heap, (0, seq, root, 0, 0, False))
+    heapq.heappush(heap, (0, seq, root, 0, 0, False, False))
     best_cost = float("inf")
     best_uprn: Optional[int] = None
     runner_cost = float("inf")
 
-    # visited pruning: keep best cost per (node_id, i, exact_hits, saw_num)
-    seen: dict[tuple[int, int, int, bool], int] = {}
+    # visited pruning: keep best cost per (node_id, i, exact_hits, saw_num_any, saw_num_exact)
+    seen: dict[tuple[int, int, int, bool, bool], int] = {}
 
     while heap:
-        cost, _, node, i, exact_hits, saw_num = heapq.heappop(heap)
+        cost, _, node, i, exact_hits, saw_num_any, saw_num_exact = heapq.heappop(heap)
 
         if cost > max_cost:
             break
 
-        key = (id(node), i, exact_hits, saw_num)
+        key = (id(node), i, exact_hits, saw_num_any, saw_num_exact)
         prev = seen.get(key)
         if prev is not None and prev <= cost:
             continue
         seen[key] = cost
 
         # Acceptance check at current node
-        acc = accept(node, i, exact_hits, saw_num)
+        acc = accept(
+            node,
+            i,
+            exact_hits,
+            saw_num_exact if numeric_must_be_exact else saw_num_any,
+        )
         if acc:
             acc_type, reason = acc
             if debug:
                 debug(
-                    f"[search]{'  '*i} ACCEPT[{acc_type}] uprn={node.uprn} cost={cost} hits={exact_hits} numeric={saw_num} progress={i}/{n} | {reason}"
+                    f"[search]{'  '*i} ACCEPT[{acc_type}] uprn={node.uprn} cost={cost} hits={exact_hits} numeric_exact={saw_num_exact} numeric_any={saw_num_any} progress={i}/{n} | {reason}"
                 )
             if cost < best_cost:
                 runner_cost = best_cost
                 best_cost = cost
                 best_uprn = node.uprn
-            elif cost < runner_cost:
+            elif node.uprn != best_uprn and cost < runner_cost:
                 runner_cost = cost
 
             # Early stop if next state cost exceeds current best by at least 1
@@ -401,7 +407,8 @@ def match_stage1_with_skips(
                     child,
                     i + 1,
                     exact_hits + 1,
-                    saw_num or is_numeric(tok),
+                    saw_num_any or is_numeric(tok),
+                    saw_num_exact or is_numeric(tok),
                 ),
             )
 
@@ -427,7 +434,9 @@ def match_stage1_with_skips(
                 f"[search]{indent}   remaining L2R: '{rem_l2r(i)}' → '{rem_l2r_after(i)}'"
             )
         seq += 1
-        heapq.heappush(heap, (cost + s_cost, seq, node, i + 1, exact_hits, saw_num))
+        heapq.heappush(
+            heap, (cost + s_cost, seq, node, i + 1, exact_hits, saw_num_any, saw_num_exact)
+        )
 
         # Fuzzy consume (only if no exact child). Try children within DL<=1
         if child is None:
@@ -451,7 +460,8 @@ def match_stage1_with_skips(
                             ch,
                             i + 1,
                             exact_hits,  # fuzzy doesn't count toward exact hits
-                            saw_num or is_numeric(lbl),
+                            saw_num_any or is_numeric(lbl),  # any numeric
+                            saw_num_exact,  # do NOT set on fuzzy
                         ),
                     )
 
