@@ -109,3 +109,15 @@ def walk_exact(
 
         node = child
         i += 1
+
+
+def match_stage1_exact_only(tokens_L2R: Sequence[str], root: TrieNode) -> Optional[int]:
+    """
+    Stage‑1 (Step‑4): Peeling + exact walk.
+
+    1) Peel redundant tail tokens by counts (up to 2 by default).
+    2) Walk exactly right‑to‑left and accept according to Step‑3 rules
+       (unique & blocked, or exact‑exhausted terminal).
+    """
+    toks = peel_end_tokens_with_trie(tokens_L2R, root, steps=4, max_k=2)
+    return walk_exact(toks, root, accept_terminal_if_exhausted=True)

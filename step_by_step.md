@@ -106,7 +106,7 @@ def peel_end_tokens_with_trie(tokens, root, steps=4, max_k=2):
 
 ---
 
-### Step 4 — Wire peeling + exact walk in a top‑level function
+### [x] Step 4 — Wire peeling + exact walk in a top‑level function
 
 **What:** Build the simplest “Stage‑1” function combining Steps 2–3.
 
