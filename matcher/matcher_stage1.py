@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Callable, Iterable, List, Sequence
 
-from trie_builder import TrieNode, count_tail_L2R
+from .trie_builder import TrieNode, count_tail_L2R
 
 
 def peel_end_tokens(
@@ -67,4 +67,3 @@ def peel_end_tokens_with_trie(
         return count_tail_L2R(root, tail)
 
     return peel_end_tokens(tokens, _count_tail, steps=steps, max_k=max_k)
-

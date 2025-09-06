@@ -1,6 +1,9 @@
-from get_data import get_random_address_data, get_address_data_from_messy_address
-from trie_builder import build_trie_from_canonical, print_trie, count_tail_L2R
-from matcher_stage1 import peel_end_tokens_with_trie
+from matcher.get_data import (
+    get_random_address_data,
+    get_address_data_from_messy_address,
+)
+from matcher.trie_builder import build_trie_from_canonical, print_trie, count_tail_L2R
+from matcher.matcher_stage1 import peel_end_tokens_with_trie
 
 
 # messy_address, canonical_addresses = get_random_address_data(print_output=True)
