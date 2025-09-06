@@ -69,15 +69,20 @@ def peel_end_tokens_with_trie(
     return peel_end_tokens(tokens, _count_tail, steps=steps, max_k=max_k)
 
 
-def walk_exact(tokens_L2R: Sequence[str], root: TrieNode) -> Optional[int]:
+def walk_exact(
+    tokens_L2R: Sequence[str],
+    root: TrieNode,
+    *,
+    accept_terminal_if_exhausted: bool = True,
+) -> Optional[int]:
     """
     Consume tokens right-to-left using exact child transitions only.
 
-    Acceptance (precision-first): at any point, if the current node has
-    an attached UPRN and is a unique suffix (count==1), and either:
-      - all tokens are consumed, or
-      - the next token cannot be consumed (no matching child),
-    then return that UPRN. Otherwise return None.
+    Accept if either:
+      A) node has UPRN AND count==1 AND (no next-token descent)
+      B) accept_terminal_if_exhausted AND all messy tokens are consumed AND node has UPRN
+
+    Otherwise continue consuming or reject when stuck / at non-terminal.
     """
     node = root
     t = list(reversed([str(x) for x in tokens_L2R]))
@@ -86,13 +91,13 @@ def walk_exact(tokens_L2R: Sequence[str], root: TrieNode) -> Optional[int]:
     n = len(t)
     while True:
         # Check acceptance at current node before attempting to consume next token
-        can_accept = (
-            node.uprn is not None
-            and node.count == 1
-            and (i >= n or not node.has_child(t[i]))
-        )
-        if can_accept:
-            return node.uprn
+        if node.uprn is not None:
+            # A) Unique & blocked (strict, unchanged)
+            if node.count == 1 and (i >= n or not node.has_child(t[i])):
+                return node.uprn
+            # B) Exact-exhausted terminal
+            if accept_terminal_if_exhausted and i >= n:
+                return node.uprn
 
         if i >= n:
             return None

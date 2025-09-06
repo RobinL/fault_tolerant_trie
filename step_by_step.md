@@ -92,12 +92,9 @@ def peel_end_tokens_with_trie(tokens, root, steps=4, max_k=2):
 
   1. `t = list(reversed(tokens_L2R))`
   2. Traverse from `root` with exact `child(tok)` for each `tok` in `t`.
-  3. Acceptance: if at any point the current node satisfies:
-
-     * `node.uprn is not None`
-     * `node.count == 1` (unique suffix)
-     * and either we consumed all tokens or the **next** token cannot descend (`not node.has_child(next_tok)`),
-       then **return** that `uprn`.
+  3. Acceptance: if at any point the current node satisfies either:
+     * Unique & blocked (strict): `node.uprn is not None` and `node.count == 1` and (either we consumed all tokens or the next token cannot descend), or
+     * Exact‑exhausted terminal: all messy tokens consumed and `node.uprn is not None` (regardless of `count`).
   4. Otherwise, return `None`.
 
 **Verify (Love Lane):**
