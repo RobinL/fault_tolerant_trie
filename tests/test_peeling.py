@@ -26,51 +26,40 @@ def test_count_tail_wrapper(love_lane_root):
     ) == 0
 
 
-def test_peel_redundant_tail_removed(love_lane_root):
-    messy = [
-        "KIMS",
-        "NAILS",
-        "4",
-        "LOVE",
-        "LANE",
-        "KINGS",
-        "LANGLEY",
-        "HERTFORDSHIRE",
-        "ENGLAND",
-    ]
-    peeled = peel_end_tokens_with_trie(messy, love_lane_root, steps=4, max_k=2)
-    assert peeled == [
-        "KIMS",
-        "NAILS",
-        "4",
-        "LOVE",
-        "LANE",
-        "KINGS",
-        "LANGLEY",
-    ]
+def _peel_text(s: str, root) -> str:
+    tokens = [t for t in s.split(" ") if t]
+    out = peel_end_tokens_with_trie(tokens, root, steps=4, max_k=2)
+    return " ".join(out)
+
+@pytest.mark.parametrize(
+    "inp, expected",
+    [
+        (
+            "KIMS NAILS 4 LOVE LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND",
+            "KIMS NAILS 4 LOVE LANE KINGS LANGLEY",
+        ),
+        ("4 LOVE LANE KINGS LANGLEY", "4 LOVE LANE KINGS LANGLEY"),
+        ("4 LOVE LANE KINGS LANGLEY EXTRA", "4 LOVE LANE KINGS LANGLEY"),
+    ],
+)
+def test_peel_pairs(love_lane_root, inp: str, expected: str):
+    assert _peel_text(inp, love_lane_root) == expected
 
 
-def test_peel_no_redundant_tail(love_lane_root):
-    tokens = ["4", "LOVE", "LANE", "KINGS", "LANGLEY"]
-    assert peel_end_tokens_with_trie(tokens, love_lane_root) == tokens
-
-
-def test_peel_single_extra_token_after_langley(love_lane_root):
-    tokens = ["4", "LOVE", "LANE", "KINGS", "LANGLEY", "EXTRA"]
-    assert peel_end_tokens_with_trie(tokens, love_lane_root) == [
-        "4",
-        "LOVE",
-        "LANE",
-        "KINGS",
-        "LANGLEY",
-    ]
-
-
-def test_peel_respects_max_k(love_lane_root):
-    # With max_k=1 we can't jump over two unknown tail tokens at once,
-    # so nothing should be peeled in one step. Our implementation stops.
-    tokens = ["4", "LOVE", "LANE", "KINGS", "LANGLEY", "HERTFORDSHIRE", "ENGLAND"]
-    assert (
-        peel_end_tokens_with_trie(tokens, love_lane_root, steps=4, max_k=1)
-        == tokens
-    )
+@pytest.mark.parametrize(
+    "inp, max_k, expected",
+    [
+        # Can't jump two tokens when max_k=1 → unchanged
+        (
+            "4 LOVE LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND",
+            1,
+            "4 LOVE LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND",
+        ),
+        # Single tail token can be peeled with max_k=1
+        ("4 LOVE LANE KINGS LANGLEY EXTRA", 1, "4 LOVE LANE KINGS LANGLEY"),
+    ],
+)
+def test_peel_respects_max_k(love_lane_root, inp: str, max_k: int, expected: str):
+    tokens = [t for t in inp.split(" ") if t]
+    out = peel_end_tokens_with_trie(tokens, love_lane_root, steps=4, max_k=max_k)
+    assert " ".join(out) == expected
