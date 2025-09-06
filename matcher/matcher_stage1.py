@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Callable, List, Sequence, Optional
+import re
 
 from .trie_builder import TrieNode, count_tail_L2R
 
@@ -121,3 +122,129 @@ def match_stage1_exact_only(tokens_L2R: Sequence[str], root: TrieNode) -> Option
     """
     toks = peel_end_tokens_with_trie(tokens_L2R, root, steps=4, max_k=2)
     return walk_exact(toks, root, accept_terminal_if_exhausted=True)
+
+
+_NUMERIC_RE = re.compile(r"^\d+[A-Z]?$")
+
+
+def is_numeric(tok: str) -> bool:
+    """Return True for numeric-ish tokens like '19', '23A'."""
+    return bool(_NUMERIC_RE.fullmatch(tok))
+
+
+def match_stage1_with_skips(
+    tokens_L2R: Sequence[str],
+    root: TrieNode,
+    *,
+    max_cost: int = 2,
+    min_exact_hits: int = 2,
+    require_numeric: bool = True,
+    skip_redundant_ratio: float = 2.0,
+    accept_terminal_if_exhausted: bool = True,
+) -> Optional[int]:
+    """
+    Stage‑1 (Step‑5): Exact + Skip search with small cost budget.
+
+    Transitions:
+      - Exact consume: cost +0, i -> i-1, descend to child
+      - Skip messy token: cost +(0 or 1) depending on counts at anchor
+
+    Acceptance: same as Step‑3 (unique & blocked OR exact‑exhausted terminal),
+    AND guards: at least `min_exact_hits` exact tokens, and (if enabled) saw a
+    numeric token on the accepted path.
+    """
+    t = list(reversed([str(x) for x in tokens_L2R]))
+    n = len(t)
+
+    import heapq
+
+    def accept(node: TrieNode, i: int, exact_hits: int, saw_num: bool) -> bool:
+        if node.uprn is None:
+            return False
+        unique_blocked = node.count == 1 and (i >= n or not node.has_child(t[i]))
+        exact_exhausted = accept_terminal_if_exhausted and i >= n
+        if not (unique_blocked or exact_exhausted):
+            return False
+        if exact_hits < min_exact_hits:
+            return False
+        if require_numeric and not saw_num:
+            return False
+        return True
+
+    def skip_cost(node: TrieNode, tok: str) -> int:
+        c_anchor = int(node.count)
+        c_combo = int(node.child_count(tok))
+        ratio = c_anchor / max(1, c_combo)
+        # 0-cost skip if the token appears to be redundant at this anchor
+        if c_anchor > c_combo and ratio >= float(skip_redundant_ratio):
+            return 0
+        return 1
+
+    # (cost, seq, node, i, exact_hits, saw_numeric)
+    heap: list[tuple[int, int, TrieNode, int, int, bool]] = []
+    seq = 0
+    heapq.heappush(heap, (0, seq, root, 0, 0, False))
+    best_cost = float("inf")
+    best_uprn: Optional[int] = None
+    runner_cost = float("inf")
+
+    # visited pruning: keep best cost per (node_id, i, exact_hits, saw_num)
+    seen: dict[tuple[int, int, int, bool], int] = {}
+
+    while heap:
+        cost, _, node, i, exact_hits, saw_num = heapq.heappop(heap)
+
+        if cost > max_cost:
+            break
+
+        key = (id(node), i, exact_hits, saw_num)
+        prev = seen.get(key)
+        if prev is not None and prev <= cost:
+            continue
+        seen[key] = cost
+
+        # Acceptance check at current node
+        if accept(node, i, exact_hits, saw_num):
+            if cost < best_cost:
+                runner_cost = best_cost
+                best_cost = cost
+                best_uprn = node.uprn
+            elif cost < runner_cost:
+                runner_cost = cost
+
+            # Early stop if next state cost exceeds current best by at least 1
+            if heap and heap[0][0] >= best_cost + 1:
+                break
+            continue
+
+        if i >= n:
+            continue
+
+        tok = t[i]
+
+        # Exact consume
+        child = node.child(tok)
+        if child is not None:
+            seq += 1
+            heapq.heappush(
+                heap,
+                (
+                    cost,
+                    seq,
+                    child,
+                    i + 1,
+                    exact_hits + 1,
+                    saw_num or is_numeric(tok),
+                ),
+            )
+
+        # Skip messy
+        s_cost = skip_cost(node, tok)
+        seq += 1
+        heapq.heappush(heap, (cost + s_cost, seq, node, i + 1, exact_hits, saw_num))
+
+    if best_uprn is not None and best_cost <= max_cost and (
+        runner_cost == float("inf") or runner_cost >= best_cost + 1
+    ):
+        return best_uprn
+    return None
