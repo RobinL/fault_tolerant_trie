@@ -24,9 +24,10 @@ A tiny Python project to prototype **Stage-1 UK address matching** using a **rig
 
 3. **Conservative accept rule (precision first):**
 
-   * **Only accept** if we are at a node with **`count == 1`** (i.e., a **unique suffix**), it carries a **`uprn`**, and we **can’t** or **don’t need to** go deeper with the next messy token.
-   * Require at least **one exact numeric match** (e.g., house/flat number) on the accepted path for extra safety.
-     *(This is a strong precision guard, and still practical for Stage‑1.)*
+   * Accept when either:
+     - (a) **Unique & blocked**: we are at a node with `uprn` and `count == 1`, and we can’t (or don’t need to) descend on the next messy token; or
+     - (b) **Exact‑exhausted terminal**: all messy tokens are consumed at a terminal node (`uprn` present), even if `count > 1` (e.g., sibling like `ANNEX`).
+   * Stronger guards like “require ≥2 exact tokens” and “must see a numeric anchor” are enforced in the **costed search** (Step‑5+) and are not applied in the Step‑3 exact‑only walk.
 
 4. **Small cost budget + margin (keep search tight):**
 

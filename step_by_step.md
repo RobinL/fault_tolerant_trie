@@ -100,7 +100,7 @@ def peel_end_tokens_with_trie(tokens, root, steps=4, max_k=2):
 **Verify (Love Lane):**
 
 * `"4 LOVE LANE KINGS LANGLEY"` → returns UPRN for 4.
-* `"7 LOVE LANE KINGS LANGLEY"` → **no match** (because the `7` node has `count=2`).
+* `"7 LOVE LANE KINGS LANGLEY"` → returns UPRN for 7 (**exact‑exhausted terminal**).
 * `"ANNEX 7 LOVE LANE KINGS LANGLEY"` → returns UPRN for ANNEX address.
 * `"KIMS NAILS 4 LOVE LANE KINGS LANGLEY"` → returns UPRN for 4 (business name ignored because acceptance triggers when unique and cannot descend).
 
@@ -154,7 +154,7 @@ We still **do not** add fuzzy matches in this step—keeps the change small.
 
 * `"KIMS NAILS 4 LOVE LANE KINGS LANGLEY"` → exact path, accepted (cost 0).
 * `"4 LOVE LANE KINGS LANGLEY EXTRA"` → the final `EXTRA` is peeled if at tail; if placed inside (e.g., `"4 LOVE EXTRA LANE KINGS LANGLEY"`), the skip op should handle it with cost 1 and still accept UPRN for 4 (since you’ll match numeric and ≥2 exact tokens).
-* `"7 LOVE LANE KINGS LANGLEY"` → still **no match** (unique suffix rule blocks it).
+* `"7 LOVE LANE KINGS LANGLEY"` → accepted via Step‑3’s exact‑exhausted terminal rule.
 
 ---
 
@@ -277,7 +277,7 @@ Return a **structured result**:
 **Cases:**
 
 * Exact unique (`4 LOVE LANE ...`) → match
-* Ambiguous stem (`7 LOVE LANE ...`) → no match
+* Exact‑exhausted terminal even if ambiguous downstream (`7 LOVE LANE ...`) → match (Step‑3 rule)
 * Business prefix (`KIMS NAILS ... 4 LOVE LANE ...`) → match
 * One typo (`HADYN` vs `HAYDN` with house number present) → match with cost 1
 * Tail redundancy (`... HERTFORDSHIRE ENGLAND`) → peeled before matching
@@ -287,7 +287,7 @@ Return a **structured result**:
 ## Notes / defaults you can copy into code comments
 
 * **Orientation:** The trie is **right‑to‑left**; always reverse the messy tokens before walking. `count_tail_L2R` internally reverses the argument so callers can think in L2R.
-* **Acceptance (precision guard):** `node.count == 1 AND node.uprn is not None` (i.e., we’re at a unique suffix) **and** `(no deeper step possible)`; additionally **require a numeric** token and `≥ 2` exact token hits on the accepted path.
+* **Acceptance (precision guard):** Step‑3 (exact‑only) accepts either unique‑blocked or exact‑exhausted terminal nodes. Later, in the costed search (Step‑5+), also enforce: **require a numeric** token and `≥ 2` exact token hits on the accepted path, and maintain margin over the runner‑up.
 * **Costs:** exact=0, fuzzy=1, skip=0/1 (0 only when counts say redundant), (optional) insert=1, (optional) transpose=1; **max total cost=2**; **margin ≥ 1** against runner‑up.
 * **Fuzzy:** Keep to **DL ≤ 1** only, and use **only if no exact** child exists for that token.
 * **Numeric detector:** `is_numeric(tok)` should treat `"191A"` / `"23A"` as numeric‑ish (e.g., `re.fullmatch(r"\d+[A-Z]?", tok)`).
@@ -339,7 +339,7 @@ def match_stage1(tokens_L2R: Sequence[str], root: TrieNode, params: Params = Par
 * On a handful of **real** postcode groups:
 
   * **Exact/near‑exact** messy inputs return the expected UPRN with **cost ≤ 1**.
-  * **Ambiguous stems** (like “7 LOVE LANE …”) are **rejected**, not guessed.
+  * **Ambiguous stems** that are not exact‑exhausted (or require edits/skips) are **rejected** when there is no clear margin; exact‑exhausted terminals like “7 LOVE LANE …” are **accepted** in Step‑3.
   * A few realistic typos (one character) are **recovered** (cost 1) when a numeric anchor is present.
 
 Once you’re happy, you can start toggling the optional transitions (transpose, insert low‑info) and tuning thresholds. The Python logic directly mirrors a small C++ UDF: a priority queue over `(node*, i, cost, flags)` with 3–4 transitions and the count‑aware rules you already have.

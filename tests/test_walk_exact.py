@@ -53,3 +53,9 @@ def test_can_disable_terminal_acceptance_if_needed(love_lane_root):
     # With the knob off, '7 ...' goes back to rejection (count==2)
     tokens = "7 LOVE LANE KINGS LANGLEY".split()
     assert walk_exact(tokens, love_lane_root, accept_terminal_if_exhausted=False) is None
+
+
+def test_terminal_but_not_exhausted_rejects(love_lane_root):
+    # Exact terminal '7' followed by extra token blocks exact walk (not exhausted)
+    tokens = "7 X LOVE LANE KINGS LANGLEY".split()
+    assert walk_exact(tokens, love_lane_root) is None
