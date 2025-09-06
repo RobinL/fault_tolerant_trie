@@ -159,6 +159,103 @@ def is_numeric(tok: str) -> bool:
     return bool(_NUMERIC_RE.fullmatch(tok))
 
 
+def damerau_levenshtein_at_most(a: str, b: str, k: int = 1) -> bool:
+    """
+    Tiny Damerau–Levenshtein check for distance ≤ k (default 1).
+    Optimized for k=1 with early exits; handles substitution, insertion/deletion,
+    and adjacent transposition.
+    """
+    if a == b:
+        return True
+    if k <= 0:
+        return False
+    la, lb = len(a), len(b)
+    if abs(la - lb) > k:
+        return False
+    # Equal length: allow one substitution or one adjacent transposition
+    if la == lb:
+        diffs = [i for i, (x, y) in enumerate(zip(a, b)) if x != y]
+        if len(diffs) == 1:
+            return True  # one substitution
+        if len(diffs) == 2:
+            i, j = diffs[0], diffs[1]
+            if j == i + 1 and a[i] == b[j] and a[j] == b[i]:
+                return True  # adjacent transposition
+        return False
+    # Length differs by 1: allow one insertion/deletion
+    # Make `a` the longer
+    if lb > la:
+        a, b = b, a
+        la, lb = lb, la
+    i = j = 0
+    edits = 0
+    while i < la and j < lb:
+        if a[i] == b[j]:
+            i += 1
+            j += 1
+        else:
+            edits += 1
+            if edits > k:
+                return False
+            i += 1  # skip one char in the longer string
+    # If leftover chars in longer string, count as edit
+    edits += (la - i)
+    return edits <= k
+
+
+def dl1_edit_type(a: str, b: str) -> Optional[str]:
+    """
+    Return the type of DL≤1 edit from a→b, or None if distance > 1.
+    Types: 'substitution', 'transpose', 'insert', 'delete'.
+    """
+    if a == b:
+        return "exact"
+    la, lb = len(a), len(b)
+    if abs(la - lb) > 1:
+        return None
+    # Equal length
+    if la == lb:
+        diffs = [i for i, (x, y) in enumerate(zip(a, b)) if x != y]
+        if len(diffs) == 1:
+            return "substitution"
+        if len(diffs) == 2:
+            i, j = diffs
+            if j == i + 1 and a[i] == b[j] and a[j] == b[i]:
+                return "transpose"
+        return None
+    # Length differs by 1
+    # Ensure a is longer for delete case
+    if la == lb + 1:
+        # delete one char from a to match b
+        i = j = 0
+        edits = 0
+        while i < la and j < lb:
+            if a[i] == b[j]:
+                i += 1
+                j += 1
+            else:
+                edits += 1
+                if edits > 1:
+                    return None
+                i += 1
+        return "delete"
+    if lb == la + 1:
+        # insert one char into a to match b
+        i = j = 0
+        edits = 0
+        while i < la and j < lb:
+            if a[i] == b[j]:
+                i += 1
+                j += 1
+            else:
+                edits += 1
+                if edits > 1:
+                    return None
+                j += 1
+        return "insert"
+    return None
+
+
 def match_stage1_with_skips(
     tokens_L2R: Sequence[str],
     root: TrieNode,
@@ -331,6 +428,32 @@ def match_stage1_with_skips(
             )
         seq += 1
         heapq.heappush(heap, (cost + s_cost, seq, node, i + 1, exact_hits, saw_num))
+
+        # Fuzzy consume (only if no exact child). Try children within DL<=1
+        if child is None:
+            for lbl, ch in node.iter_children():
+                etype = dl1_edit_type(tok, lbl)
+                if etype is not None and etype != "exact":
+                    if debug:
+                        indent = '  ' * i
+                        debug(
+                            f"[search]{indent} FUZZY '{tok}' ≈ '{lbl}': {etype}; cost +1; child(count={ch.count}, uprn={ch.uprn}); progress {i}/{n}→{i+1}/{n}"
+                        )
+                        debug(
+                            f"[search]{indent}   remaining L2R: '{rem_l2r(i)}' → '{rem_l2r_after(i)}'"
+                        )
+                    seq += 1
+                    heapq.heappush(
+                        heap,
+                        (
+                            cost + 1,
+                            seq,
+                            ch,
+                            i + 1,
+                            exact_hits,  # fuzzy doesn't count toward exact hits
+                            saw_num or is_numeric(lbl),
+                        ),
+                    )
 
     if best_uprn is not None and best_cost <= max_cost and (
         runner_cost == float("inf") or runner_cost >= best_cost + 1

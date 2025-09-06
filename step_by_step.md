@@ -239,21 +239,9 @@ Return a **structured result**:
 
 *(Again, optional for v1. Keep off until you need it.)*
 
----
 
-### Step 10 — Add a simple **debug trace** mode
 
-**What:** Make it easy to see *why* a match happened (or not).
-
-**Change (`matcher_stage1.py`):**
-
-* Add `debug=True` parameter that, when set, accumulates a small step log for the best path (e.g., actions: `EXACT "LANGLEY"`, `FUZZY "HAYDN"→"HADYN"`, `SKIP "ENGLAND"(0)`, …) and returns it in the structured result.
-
-**Verify:** Run with `debug=True` on your examples and inspect the printed trace.
-
----
-
-### Step 11 — Integrate into `try.py` (simple demo harness)
+### Step 10 — Integrate into `try.py` (simple demo harness)
 
 **What:** Show end‑to‑end on:
 
@@ -270,19 +258,6 @@ Return a **structured result**:
 
 ---
 
-### Step 12 — Add a minimal assertion suite (quick tests)
-
-**What:** Put a few asserts behind a `if __name__ == "__main__":` block or stand‑alone `tests_smoke.py`.
-
-**Cases:**
-
-* Exact unique (`4 LOVE LANE ...`) → match
-* Exact‑exhausted terminal even if ambiguous downstream (`7 LOVE LANE ...`) → match (Step‑3 rule)
-* Business prefix (`KIMS NAILS ... 4 LOVE LANE ...`) → match
-* One typo (`HADYN` vs `HAYDN` with house number present) → match with cost 1
-* Tail redundancy (`... HERTFORDSHIRE ENGLAND`) → peeled before matching
-
----
 
 ## Notes / defaults you can copy into code comments
 

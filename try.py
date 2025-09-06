@@ -89,3 +89,20 @@ for addr in [
     # Then run the skip-enabled matcher with a concise expansion trace
     uprn = match_stage1_with_skips(addr.split(), root, debug=log)
     print(f"Result UPRN: {uprn}")
+
+
+# --- Step 6: Fuzzy consume (DL≤1) demo ---
+print("\n=== Step 6: Fuzzy consume demo (DL≤1) ===")
+canonical_haydn = [
+    (1001, ["12", "HAYDN", "PARK", "ROAD"], "W12 3AB"),
+    (1002, ["10", "HAYDN", "PARK", "ROAD"], "W12 3AB"),
+]
+root_h = build_trie_from_canonical(canonical_haydn, reverse=True)
+for addr in [
+    "12 HADYN PARK ROAD",  # transposition: AD vs DA
+    "10 HAYEN PARK ROAD",  # substitution: DN vs EN
+    "HADYN PARK ROAD",     # no numeric → guard blocks
+]:
+    print(f"\nInput: {addr}")
+    res = match_stage1_with_skips(addr.split(), root_h, debug=log)
+    print(f"Result UPRN: {res}")
