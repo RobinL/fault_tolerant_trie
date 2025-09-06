@@ -82,7 +82,7 @@ def peel_end_tokens_with_trie(tokens, root, steps=4, max_k=2):
 
 ---
 
-### Step 3 — Exact right‑to‑left walk (no fuzz, no skips)
+### [x] Step 3 — Exact right‑to‑left walk (no fuzz, no skips)
 
 **What:** A baseline matcher that consumes tokens R→L with **exact** child matches only and accepts only at **unique** leaves (`count==1` and `uprn` present).
 

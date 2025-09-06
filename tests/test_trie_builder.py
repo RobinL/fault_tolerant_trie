@@ -77,3 +77,16 @@ def test_build_trie_reverse_flag():
     assert root_r2l.child_count("B") == 1
     assert root_r2l.child_count("C") == 1
 
+
+def test_root_count_after_inserts():
+    canonical_love_lane = [
+        (1, ["5", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
+        (2, ["9", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
+        (3, ["8", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
+        (4, ["7", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
+        (5, ["ANNEX", "7", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
+        (6, ["6", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
+        (7, ["4", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
+    ]
+    root = build_trie_from_canonical(canonical_love_lane, reverse=True)
+    assert root.count == len(canonical_love_lane)

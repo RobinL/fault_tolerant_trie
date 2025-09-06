@@ -19,6 +19,9 @@ class TrieNode:
     # --- core ops ---
     def insert(self, tokens: TokenSeq, uprn: Optional[int] = None) -> None:
         node = self
+        # Bump root count so future skip logic (which may use node.count at root)
+        # has meaningful totals.
+        node.count += 1
         for tok in tokens:
             node = node.children.setdefault(tok, TrieNode())
             node.count += 1

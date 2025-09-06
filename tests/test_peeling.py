@@ -46,6 +46,10 @@ def _peel_text_params(s: str, root, *, steps: int, max_k: int) -> str:
         ),
         ("4 LOVE LANE KINGS LANGLEY", "4 LOVE LANE KINGS LANGLEY"),
         ("4 LOVE LANE KINGS LANGLEY EXTRA", "4 LOVE LANE KINGS LANGLEY"),
+        # Tie case: counts equal for KINGS vs LANE anchors, do not peel
+        ("4 LOVE LANE KINGS", "4 LOVE LANE KINGS"),
+        # Unknown last token base=0, jump increases to >0 → peel
+        ("4 LOVE LANE KINGS LANGLEY ZZZ", "4 LOVE LANE KINGS LANGLEY"),
     ],
 )
 def test_peel_pairs(love_lane_root, inp: str, expected: str):
