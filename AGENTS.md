@@ -61,6 +61,10 @@ Run the demo:
 python try.py
 ```
 
+NOTE IMPORTANTLY:  we are using the vs code interactive window and ipykernel to run the code so in general code will be run in try.py by selecting it and shift enter, NOT by typing python
+
+That means we DO NOT
+
 > The demo loads a random messy/canonical pair or a provided one, builds a small suffix trie from OS AddressBase rows (same postcode group), and prints an ASCII tree.
 
 ---

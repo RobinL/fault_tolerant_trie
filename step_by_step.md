@@ -33,20 +33,9 @@ The result is a compact, understandable Python implementation that mirrors what 
 
 > **File names referenced below**: we’ll add a new `matcher_stage1.py` for the walk, and extend `trie_builder.py` with some helpers. You can keep experimenting in `try.py`.
 
-### Step 0 — Make token case consistent (one‑liner; easy to verify)
 
-**What:** Ensure both canonical and messy tokens are **uppercased** before reaching the trie and the matcher (even though you clean punctuation already).
 
-**Change:**
-
-* In `build_trie_from_canonical(...)`: wrap `tokens = [str(t).upper() for t in tokens]`.
-* In `get_address_data_from_messy_address(...)`: add `.upper()` before `.str_split(' ')` or upper in Python after fetching.
-
-**Verify:** Print tokens from `get_address_data_from_messy_address` and one canonical row; confirm all uppercased.
-
----
-
-### Step 1 — Add small helpers to the trie (no behavior change)
+### [x] Step 1 — Add small helpers to the trie (no behavior change)
 
 **What:** Convenience methods used by the matcher; keeps matching code readable.
 
@@ -74,7 +63,7 @@ The result is a compact, understandable Python implementation that mirrors what 
 
 ---
 
-### Step 2 — Implement `peel_end_tokens` exactly (standalone function + tests)
+### [x] Step 2 — Implement `peel_end_tokens` exactly (standalone function + tests)
 
 **What:** Bring your reference function into a new module `matcher_stage1.py` as is, parameterized by a callable `count_tail`.
 

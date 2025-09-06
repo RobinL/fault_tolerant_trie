@@ -43,6 +43,24 @@ class TrieNode:
                 return 0
         return node.count
 
+    # --- convenience helpers for matcher readability ---
+    def child(self, tok: str) -> Optional["TrieNode"]:
+        """Return the direct child for token, or None if absent."""
+        return self.children.get(tok)
+
+    def has_child(self, tok: str) -> bool:
+        """True if a direct child exists for token."""
+        return tok in self.children
+
+    def child_count(self, tok: str) -> int:
+        """Count of the child node for token; 0 if it does not exist."""
+        child = self.children.get(tok)
+        return 0 if child is None else int(child.count)
+
+    def iter_children(self):
+        """Iterator over (token, child_node) pairs."""
+        return self.children.items()
+
 
 # --- construction helpers ---
 
@@ -114,3 +132,15 @@ def print_trie(node: TrieNode) -> None:
     print("(root)")
     for line in ascii_lines(node):
         print(line)
+
+
+# --- wrappers for suffix count semantics (L2R to R2L) ---
+
+def count_tail_L2R(root: TrieNode, suffix_tokens_L2R: Sequence[str]) -> int:
+    """
+    Given a left-to-right suffix (e.g., ["KINGS","LANGLEY"]) for an address,
+    convert to the right-to-left trie path and return the node.count reachable
+    by that path. Returns 0 if the path does not exist.
+    """
+    path = list(reversed([t for t in suffix_tokens_L2R if t is not None]))
+    return root.count_for_path(path)
