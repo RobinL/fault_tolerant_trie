@@ -31,6 +31,12 @@ def _peel_text(s: str, root) -> str:
     out = peel_end_tokens_with_trie(tokens, root, steps=4, max_k=2)
     return " ".join(out)
 
+
+def _peel_text_params(s: str, root, *, steps: int, max_k: int) -> str:
+    tokens = [t for t in s.split(" ") if t]
+    out = peel_end_tokens_with_trie(tokens, root, steps=steps, max_k=max_k)
+    return " ".join(out)
+
 @pytest.mark.parametrize(
     "inp, expected",
     [
@@ -63,3 +69,41 @@ def test_peel_respects_max_k(love_lane_root, inp: str, max_k: int, expected: str
     tokens = [t for t in inp.split(" ") if t]
     out = peel_end_tokens_with_trie(tokens, love_lane_root, steps=4, max_k=max_k)
     assert " ".join(out) == expected
+
+
+@pytest.mark.parametrize(
+    "inp, steps, max_k, expected",
+    [
+        # With max_k=2, a three-token tail cannot be peeled at all
+        # because we can't "see" back to LANGLEY in one hop (need k>=3).
+        ("4 LOVE LANE KINGS LANGLEY A B C", 1, 2, "4 LOVE LANE KINGS LANGLEY A B C"),
+        ("4 LOVE LANE KINGS LANGLEY A B C", 2, 2, "4 LOVE LANE KINGS LANGLEY A B C"),
+        # With max_k=2, a two-token tail can be peeled in a single step.
+        ("4 LOVE LANE KINGS LANGLEY A B", 1, 2, "4 LOVE LANE KINGS LANGLEY"),
+        # With max_k=3 and one step, remove all three noisy tokens at once.
+        (
+            "4 LOVE LANE KINGS LANGLEY A B C",
+            1,
+            3,
+            "4 LOVE LANE KINGS LANGLEY",
+        ),
+        # With max_k=1, even many steps cannot remove a two-token noisy tail.
+        (
+            "4 LOVE LANE KINGS LANGLEY A B",
+            3,
+            1,
+            "4 LOVE LANE KINGS LANGLEY A B",
+        ),
+        # With max_k=1 and a single tail token, one step is enough.
+        (
+            "4 LOVE LANE KINGS LANGLEY EXTRA",
+            1,
+            1,
+            "4 LOVE LANE KINGS LANGLEY",
+        ),
+        # With steps=0, nothing happens regardless of max_k.
+        ("4 LOVE LANE KINGS LANGLEY EXTRA", 0, 10, "4 LOVE LANE KINGS LANGLEY EXTRA"),
+    ],
+)
+def test_peel_steps_and_max_k(love_lane_root, inp: str, steps: int, max_k: int, expected: str):
+    assert _peel_text_params(inp, love_lane_root, steps=steps, max_k=max_k) == expected
