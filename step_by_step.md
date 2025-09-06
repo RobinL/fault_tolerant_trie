@@ -122,7 +122,7 @@ def match_stage1_exact_only(tokens, root):
 
 ---
 
-### Step 5 — Add **skip** (delete messy token) with **count‑aware cost**
+### [x] Step 5 — Add **skip** (delete messy token) with **count‑aware cost**
 
 **What:** Introduce a tiny state search with **costs**. We’ll allow skipping messy tokens:
 
@@ -153,7 +153,7 @@ We still **do not** add fuzzy matches in this step—keeps the change small.
 **Verify (Love Lane + synthetics):**
 
 * `"KIMS NAILS 4 LOVE LANE KINGS LANGLEY"` → exact path, accepted (cost 0).
-* `"4 LOVE LANE KINGS LANGLEY EXTRA"` → the final `EXTRA` is peeled if at tail; if placed inside (e.g., `"4 LOVE EXTRA LANE KINGS LANGLEY"`), the skip op should handle it with cost 1 and still accept UPRN for 4 (since you’ll match numeric and ≥2 exact tokens).
+* `"4 LOVE LANE KINGS LANGLEY EXTRA"` → peeled at tail; if placed inside (e.g., `"4 LOVE EXTRA LANE KINGS LANGLEY"`), the skip op handles it with cost 0 or 1 depending on counts. In Love Lane, it’s cost 0 (redundant at that anchor: child_count(EXTRA)=0).
 * `"7 LOVE LANE KINGS LANGLEY"` → accepted via Step‑3’s exact‑exhausted terminal rule.
 
 ---
