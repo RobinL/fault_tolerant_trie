@@ -1,3 +1,6 @@
+
+
+
 from matcher.trie_builder import build_trie_from_canonical, print_trie
 from matcher.matcher_stage1 import (
     peel_end_tokens_with_trie,
@@ -23,30 +26,24 @@ from matcher.matcher_stage1 import (
 # print_trie(root)
 
 
-canonical_love_lane = [
-    (1, ["5", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
-    (2, ["9", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
-    (3, ["8", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
-    (4, ["7", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
-    (5, ["ANNEX", "7", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
-    (6, ["6", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
-    (7, ["4", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
+# === Hayes Cricket Club canonical data ===
+canonical_hayes = [
+    (100023416072, ["HAYES", "CRICKET", "CLUB", "THE", "GREEN", "WOOD", "END", "HAYES"], "UB3 2RJ"),
+    (10091101198, ["HAYES", "CRICKET", "CLUB", "PAVILLION", "THE", "GREEN", "WOOD", "END", "HAYES"], "UB3 2RJ"),
+    (
+        10092982659,
+        ["SMARTYS", "NURSERY", "SMARTYS", "NURSERY", "HAYES", "HAYES", "CRICKET", "CLUB", "PAVILLION", "WOOD", "END", "HAYES"],
+        "UB3 2RJ",
+    ),
+    (100021440394, ["6", "WOOD", "END", "HAYES"], "UB3 2RJ"),
+    (100021440395, ["7", "WOOD", "END", "HAYES"], "UB3 2RJ"),
+    (100021440396, ["8", "WOOD", "END", "HAYES"], "UB3 2RJ"),
+    (100021440393, ["5", "WOOD", "END", "HAYES"], "UB3 2RJ"),
 ]
-root = build_trie_from_canonical(canonical_love_lane, reverse=True)
+root = build_trie_from_canonical(canonical_hayes, reverse=True)
 
-print("\n=== Step 1: Love Lane trie (sanity check) ===")
+print("\n=== Step 1: Hayes CC trie (sanity check) ===")
 print_trie(root)
-
-
-# addr = "20 Essex Close Bletchley, Milton Keynes"
-# pc = "MK3 7ET"
-
-# addr = "KIMS NAILS 4 LOVE LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND"
-# pc = "WD4 9HW"
-
-# messy_address, canonical_addresses = get_address_data_from_messy_address(
-#     addr, pc, print_output=True
-# )
 
 
 def log(msg: str) -> None:
@@ -54,7 +51,7 @@ def log(msg: str) -> None:
 
 
 print("\n=== Step 2: Peeling demo ===")
-messy_str = "KIMS NAILS 4 LOVE LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND"
+messy_str = "HAYES CRICKET CLUB (BAR) HAYES CRICKET CLUB PAVILLION THE GREEN WOOD END HAYES UB3 2RJ"
 print("Input:", messy_str)
 peeled = peel_end_tokens_with_trie(messy_str.split(), root, steps=4, max_k=2, debug=log)
 print("Peeled:", " ".join(peeled))
@@ -62,9 +59,9 @@ print("Peeled:", " ".join(peeled))
 
 print("\n=== Step 3: Exact walk demo (with trace) ===")
 for addr in [
-    "4 LOVE LANE KINGS LANGLEY",
-    "7 LOVE LANE KINGS LANGLEY",
-    "ANNEX 7 LOVE LANE KINGS LANGLEY",
+    "HAYES CRICKET CLUB THE GREEN WOOD END HAYES",
+    "HAYES CRICKET CLUB PAVILLION THE GREEN WOOD END HAYES",
+    "SMARTYS NURSERY SMARTYS NURSERY HAYES HAYES CRICKET CLUB PAVILLION WOOD END HAYES",
 ]:
     print(f"\nInput: {addr}")
     uprn = match_stage1_exact_only(addr.split(), root)
@@ -78,8 +75,8 @@ for addr in [
 
 print("\n=== Step 5: Skips (search) demo with debug ===")
 for addr in [
-    "4 LOVE EXTRA LANE KINGS LANGLEY",  # inner noise → skip
-    "KIMS NAILS 4 LOVE LANE KINGS LANGLEY HERTFORDSHIRE",  # business + redundant county
+    "HAYES CRICKET CLUB PAVILLION THE GREEN EXTRA WOOD END HAYES",  # inner noise → skip
+    "HAYES CRICKET CLUB (BAR) HAYES CRICKET CLUB PAVILLION THE GREEN WOOD END HAYES HERTFORDSHIRE",  # business + redundant county
 ]:
     print(f"\nInput: {addr}")
     # Show peel step first
@@ -106,17 +103,20 @@ for addr in [
     print(f"Result UPRN: {res}")
 
 
-# --- Step 7: Stage‑1 API (structured result) demo ---
-print("\n=== Step 7: Stage‑1 API demo (structured result) ===")
-params = Params()  # defaults: strict guards, numeric must be exact
+# --- Step 7: Stage-1 API (structured result) demo ---
+print("\n=== Step 7: Stage-1 API demo (structured result) ===")
+params = Params(numeric_must_be_exact=False)  # defaults: strict guards, numeric must be exact
 
 for addr in [
-    "15 LOVE LANE KINGS LANGLEY",
-    "7 LOVE LANE KINGS LANGLEY",
-    "KIMS NAILS 4 LOVE LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND",
-    "4 LOVE EXTRA LANE KINGS LANGLEY",
-    "4 LOVE LANE LANGLEY KINGS",
+
+    "HAYES CRICKET CLUB (BAR) HAYES CRICKET CLUB PAVILLION THE GREEN WOOD END HAYES",
+
 ]:
     print(f"\nInput: {addr}")
     result = match_stage1(addr.split(), root, params, debug=False)
     print("Structured result:", result)
+
+
+
+
+HAYES CRICKET CLUB PAVILLION THE GREEN WOOD END HAYES

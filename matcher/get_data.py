@@ -2,12 +2,13 @@ import duckdb
 
 
 OS_PARQUET = "/Users/robin.linacre/Documents/data_linking/uk_address_matcher/secret_data/ord_surv/raw/add_gb_builtaddress_sorted_zstd.parquet"
-FHRS_PATH = "/Users/robin.linacre/Documents/data_linking/uk_address_matcher/example_data/fhrs_addresses_sample.parquet"
+FHRS_PATH = "/Users/robin.linacre/Documents/data_linking/uk_address_matcher/secret_data/fhrs/fhrs_data.parquet"
 
 
 CLEAN_PIPELINE_SQL = """
                 .upper()
-                .regexp_replace('[,.]', ' ', 'g')
+                -- replace commas, periods, and apostrophes with spaces
+                .regexp_replace('[,.'']', ' ', 'g')
                 .regexp_replace('\\s+', ' ', 'g')
                 .trim()
                 .str_split(' ')
@@ -49,8 +50,9 @@ def get_random_address_data(
     # FHRS: one row for the exact postcode, with tokenized address_concat
     fhrs_sql = f"""
         SELECT
-            unique_id,
-            address_concat{CLEAN_PIPELINE_SQL} AS tokens,
+            fhrsid as unique_id,
+            concat_ws(' ', businessname, addressline1, addressline2, addressline3, addressline4){CLEAN_PIPELINE_SQL} AS tokens,
+
             postcode
         FROM read_parquet('{esc(fhrs_path)}')
         WHERE postcode = '{esc(pc)}'
@@ -72,8 +74,17 @@ def get_random_address_data(
     os_rel = con.sql(os_sql)
 
     if print_output:
-        fhrs_rel.show(max_width=20000)
-        os_rel.show(max_width=20000)
+        sql = f"""
+        select *
+          FROM read_parquet('{esc(fhrs_path)}')
+          where fhrsid in (select unique_id from fhrs_rel)"""
+        con.sql(sql).show(max_width=20000)
+
+        sql = f"""
+        select uprn, fulladdress
+            FROM read_parquet('{esc(os_parquet_path)}')
+            where postcode = '{esc(pc)}'"""
+        con.sql(sql).show(max_width=20000)
 
     return fhrs_rel.fetchall()[0], os_rel.fetchall()
 

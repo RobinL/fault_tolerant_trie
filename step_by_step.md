@@ -178,29 +178,33 @@ We still **do not** add fuzzy matches in this step—keeps the change small.
 
 ---
 
-### Step 7 — Expose a single Stage‑1 API and keep Step‑5/6 knobs strict
+### [x] Step 7 — Expose a single Stage‑1 API and keep Step‑5/6 knobs strict
 
 **What:** Create one exported function with conservative defaults and the acceptance guards.
 
 **Change (`matcher_stage1.py`):**
 
 ```python
-DEFAULT_PARAMS = dict(
-    max_cost=2,
-    min_exact_hits=2,
-    require_numeric=True,
-    skip_redundant_ratio=2.0,  # 0-cost skip if c_anchor/c_combo >= 2
-)
+@dataclass
+class Params:
+    max_cost: int = 2
+    min_exact_hits: int = 2
+    require_numeric: bool = True
+    numeric_must_be_exact: bool = True
+    skip_redundant_ratio: float = 2.0
+    accept_terminal_if_exhausted: bool = True
 
-def match_stage1(tokens, root, params=DEFAULT_PARAMS):
+def match_stage1(tokens, root, params=Params()) -> dict:
     toks = peel_end_tokens_with_trie(tokens, root, steps=4, max_k=2)
-    return match_stage1_core(toks, root, params)  # wraps the search from Steps 5–6
+    # wraps exact/skip/fuzzy from Steps 5–6
+    uprn = match_stage1_with_skips(toks, root, **asdict(params))
+    return {"matched": uprn is not None, "uprn": uprn, "cost": None, "peeled_tokens": toks}
 ```
 
 Return a **structured result**:
 
 ```python
-{"matched": True, "uprn": <int>, "cost": <int>, "path_tokens": [...]}  # or matched=False
+{"matched": True, "uprn": <int>, "cost": <int|None>, "peeled_tokens": [...], "input_tokens": [...]}  # or matched=False
 ```
 
 **Verify:** Re-run earlier tests through this single entry point.
