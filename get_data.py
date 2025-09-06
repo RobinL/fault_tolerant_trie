@@ -5,6 +5,18 @@ OS_PARQUET = "/Users/robin.linacre/Documents/data_linking/uk_address_matcher/sec
 FHRS_PATH = "/Users/robin.linacre/Documents/data_linking/uk_address_matcher/example_data/fhrs_addresses_sample.parquet"
 
 
+CLEAN_PIPELINE_SQL = """
+                .upper()
+                .regexp_replace('[,.]', ' ', 'g')
+                .regexp_replace('\\s+', ' ', 'g')
+                .trim()
+                .str_split(' ')
+"""
+
+
+PC_REMOVE_TMPL_SQL = ".regexp_replace('{pc}', '', 'gi')"
+
+
 def get_random_address_data(
     postcode: str | None = None,
     fhrs_path: str = FHRS_PATH,
@@ -38,11 +50,7 @@ def get_random_address_data(
     fhrs_sql = f"""
         SELECT
             unique_id,
-            address_concat
-                .regexp_replace('[,.]', ' ', 'g')
-                .regexp_replace('\\s+', ' ', 'g')
-                .trim()
-                .str_split(' ') AS tokens,
+            address_concat{CLEAN_PIPELINE_SQL} AS tokens,
             postcode
         FROM read_parquet('{esc(fhrs_path)}')
         WHERE postcode = '{esc(pc)}'
@@ -55,13 +63,7 @@ def get_random_address_data(
     os_sql = f"""
         SELECT
             uprn,
-            fulladdress
-                .regexp_replace('[,.]', ' ', 'g')
-                .regexp_replace('\\s+', ' ', 'g')
-                .trim()
-                .regexp_replace('{esc(pc)}', '', 'gi')
-                .trim()
-                .str_split(' ') AS tokens,
+            fulladdress{PC_REMOVE_TMPL_SQL.format(pc=esc(pc))}{CLEAN_PIPELINE_SQL} AS tokens,
             postcode
         FROM read_parquet('{esc(os_parquet_path)}')
         WHERE LEFT(postcode, LENGTH(postcode)-1) = '{esc(pc_short)}'
@@ -95,11 +97,7 @@ def get_address_data_from_messy_address(
     input_sql = f"""
         SELECT
             CAST(1 AS BIGINT) AS unique_id,
-            addr
-                .regexp_replace('[,.]', ' ', 'g')
-                .regexp_replace('\\s+', ' ', 'g')
-                .trim()
-                .str_split(' ') AS tokens,
+            addr{CLEAN_PIPELINE_SQL} AS tokens,
             postcode
         FROM (SELECT '{esc(address_no_postcode)}' AS addr, '{esc(pc)}' AS postcode)
     """
@@ -109,13 +107,7 @@ def get_address_data_from_messy_address(
     os_sql = f"""
         SELECT
             uprn,
-            fulladdress
-                .regexp_replace('[,.]', ' ', 'g')
-                .regexp_replace('\\s+', ' ', 'g')
-                .trim()
-                .regexp_replace('{esc(pc)}', '', 'gi')
-                .trim()
-                .str_split(' ') AS tokens,
+            fulladdress{PC_REMOVE_TMPL_SQL.format(pc=esc(pc))}{CLEAN_PIPELINE_SQL} AS tokens,
             postcode
         FROM read_parquet('{esc(os_parquet_path)}')
         WHERE LEFT(postcode, LENGTH(postcode)-1) = '{esc(pc_short)}'
