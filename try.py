@@ -3,7 +3,11 @@ from matcher.get_data import (
     get_address_data_from_messy_address,
 )
 from matcher.trie_builder import build_trie_from_canonical, print_trie, count_tail_L2R
-from matcher.matcher_stage1 import peel_end_tokens_with_trie
+from matcher.matcher_stage1 import (
+    peel_end_tokens_with_trie,
+    match_stage1_exact_only,
+    match_stage1_with_skips,
+)
 
 
 # messy_address, canonical_addresses = get_random_address_data(print_output=True)
@@ -47,35 +51,41 @@ print_trie(root)
 # )
 
 
-messy = [
-    "KIMS",
-    "NAILS",
-    "4",
-    "LOVE",
-    "LANE",
-    "KINGS",
-    "LANGLEY",
-    "HERTFORDSHIRE",
-    "ENGLAND",
-]
-peeled = peel_end_tokens_with_trie(messy, root, steps=4, max_k=2)
-print("Original tokens:", messy)
-print("Peeled tokens:  ", peeled)
-assert peeled == [
-    "KIMS",
-    "NAILS",
-    "4",
-    "LOVE",
-    "LANE",
-    "KINGS",
-    "LANGLEY",
-]
+def log(msg: str) -> None:
+    print(msg)
 
-# No redundant tail → unchanged
-no_tail = ["4", "LOVE", "LANE", "KINGS", "LANGLEY"]
-no_tail_after = peel_end_tokens_with_trie(no_tail, root)
-print("No-tail input:  ", no_tail)
-print("No-tail output: ", no_tail_after)
-assert no_tail_after == no_tail
 
-print("Step 2 peeling verified OK.\n")
+print("\n=== Step 2: Peeling demo ===")
+messy_str = "KIMS NAILS 4 LOVE LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND"
+print("Input:", messy_str)
+peeled = peel_end_tokens_with_trie(messy_str.split(), root, steps=4, max_k=2, debug=log)
+print("Peeled:", " ".join(peeled))
+
+
+print("\n=== Step 3: Exact walk demo (with trace) ===")
+for addr in [
+    "4 LOVE LANE KINGS LANGLEY",
+    "7 LOVE LANE KINGS LANGLEY",
+    "ANNEX 7 LOVE LANE KINGS LANGLEY",
+]:
+    print(f"\nInput: {addr}")
+    uprn = match_stage1_exact_only(addr.split(), root)
+    # Re-run with explicit exact trace to show steps
+    _ = match_stage1_exact_only(addr.split(), root)  # quiet
+    from matcher.matcher_stage1 import walk_exact
+
+    _ = walk_exact(addr.split(), root, accept_terminal_if_exhausted=True, debug=log)
+    print(f"Result UPRN: {uprn}")
+
+
+print("\n=== Step 5: Skips (search) demo with debug ===")
+for addr in [
+    "4 LOVE EXTRA LANE KINGS LANGLEY",  # inner noise → skip
+    "KIMS NAILS 4 LOVE LANE KINGS LANGLEY HERTFORDSHIRE",  # business + redundant county
+]:
+    print(f"\nInput: {addr}")
+    # Show peel step first
+    _ = peel_end_tokens_with_trie(addr.split(), root, steps=4, max_k=2, debug=log)
+    # Then run the skip-enabled matcher with a concise expansion trace
+    uprn = match_stage1_with_skips(addr.split(), root, debug=log)
+    print(f"Result UPRN: {uprn}")

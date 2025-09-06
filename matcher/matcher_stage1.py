@@ -11,6 +11,7 @@ def peel_end_tokens(
     count_tail: Callable[[Sequence[str]], int],
     steps: int = 4,
     max_k: int = 2,
+    debug: Optional[Callable[[str], None]] = None,
 ) -> List[str]:
     """
     Deterministic tail peeling by counts.
@@ -32,23 +33,33 @@ def peel_end_tokens(
         return []
 
     out = list(tokens)
-    for _ in range(max(0, int(steps))):
+    for step_idx in range(max(0, int(steps))):
         if len(out) <= 1:
             break
 
-        base = count_tail([out[-1]])
+        anchor = out[-1]
+        base = count_tail([anchor])
         best_k = 0
         best_score = base
 
         max_try = min(int(max_k), len(out) - 1)
         for k in range(1, max_try + 1):
-            new_last = out[-k - 1]
-            score = count_tail([new_last])
+            new_anchor = out[-k - 1]
+            score = count_tail([new_anchor])
+            if debug:
+                debug(
+                    f"[peel] step {step_idx+1}: anchor='{anchor}' base={base}; consider k={k} -> '{new_anchor}' score={score}"
+                )
             if score > best_score:
                 best_score = score
                 best_k = k
 
         if best_k > 0:
+            if debug:
+                debug(f"[peel] drop last {best_k} token(s); base→best {base}→{best_score}")
+                debug(
+                    f"[peel] tokens now: {' '.join(out[: -best_k])}"
+                )
             out = out[: -best_k]
         else:
             break
@@ -61,13 +72,14 @@ def peel_end_tokens_with_trie(
     root: TrieNode,
     steps: int = 4,
     max_k: int = 2,
+    debug: Optional[Callable[[str], None]] = None,
 ) -> List[str]:
     """Thin wrapper wiring peel_end_tokens to the trie count helper."""
 
     def _count_tail(tail: Sequence[str]) -> int:
         return count_tail_L2R(root, tail)
 
-    return peel_end_tokens(tokens, _count_tail, steps=steps, max_k=max_k)
+    return peel_end_tokens(tokens, _count_tail, steps=steps, max_k=max_k, debug=debug)
 
 
 def walk_exact(
@@ -75,6 +87,7 @@ def walk_exact(
     root: TrieNode,
     *,
     accept_terminal_if_exhausted: bool = True,
+    debug: Optional[Callable[[str], None]] = None,
 ) -> Optional[int]:
     """
     Consume tokens right-to-left using exact child transitions only.
@@ -95,9 +108,17 @@ def walk_exact(
         if node.uprn is not None:
             # A) Unique & blocked (strict, unchanged)
             if node.count == 1 and (i >= n or not node.has_child(t[i])):
+                if debug:
+                    debug(
+                        f"[exact]{'  '*i} ACCEPT[unique_blocked] uprn={node.uprn} i={i}/{n}"
+                    )
                 return node.uprn
             # B) Exact-exhausted terminal
             if accept_terminal_if_exhausted and i >= n:
+                if debug:
+                    debug(
+                        f"[exact]{'  '*i} ACCEPT[terminal_exhausted] uprn={node.uprn} i={i}/{n}"
+                    )
                 return node.uprn
 
         if i >= n:
@@ -106,8 +127,14 @@ def walk_exact(
         nxt = t[i]
         child = node.child(nxt)
         if child is None:
+            if debug:
+                debug(f"[exact]{'  '*i} BLOCK on '{nxt}' (no child)")
             return None
 
+        if debug:
+            debug(
+                f"[exact]{'  '*i} EXACT '{nxt}' -> child(count={child.count}, uprn={child.uprn})"
+            )
         node = child
         i += 1
 
@@ -141,6 +168,7 @@ def match_stage1_with_skips(
     require_numeric: bool = True,
     skip_redundant_ratio: float = 2.0,
     accept_terminal_if_exhausted: bool = True,
+    debug: Optional[Callable[[str], None]] = None,
 ) -> Optional[int]:
     """
     Stage‑1 (Step‑5): Exact + Skip search with small cost budget.
@@ -158,18 +186,43 @@ def match_stage1_with_skips(
 
     import heapq
 
-    def accept(node: TrieNode, i: int, exact_hits: int, saw_num: bool) -> bool:
+    if debug:
+        debug(
+            "[search] tokens L2R: "
+            + " ".join(str(x) for x in tokens_L2R)
+            + " | R→L: "
+            + " ".join(t)
+        )
+
+    def rem_l2r(i: int) -> str:
+        # Remaining tokens in L2R before consuming the next R→L token t[i]
+        return " ".join(tokens_L2R[: -(i) or None])
+
+    def rem_l2r_after(i: int) -> str:
+        # Remaining tokens after consuming/skip the next token
+        return " ".join(tokens_L2R[: -(i + 1) or None])
+
+    def consumed_l2r_after(i: int) -> str:
+        return " ".join(tokens_L2R[-(i + 1) :])
+
+    def accept(node: TrieNode, i: int, exact_hits: int, saw_num: bool) -> Optional[tuple[str, str]]:
         if node.uprn is None:
-            return False
+            return None
         unique_blocked = node.count == 1 and (i >= n or not node.has_child(t[i]))
         exact_exhausted = accept_terminal_if_exhausted and i >= n
         if not (unique_blocked or exact_exhausted):
-            return False
+            return None
         if exact_hits < min_exact_hits:
-            return False
+            return None
         if require_numeric and not saw_num:
-            return False
-        return True
+            return None
+        if unique_blocked:
+            reason = (
+                "no next token" if i >= n else f"next token '{t[i]}' cannot descend"
+            )
+            return ("unique_blocked", reason)
+        else:
+            return ("terminal_exhausted", "all tokens consumed at terminal node")
 
     def skip_cost(node: TrieNode, tok: str) -> int:
         c_anchor = int(node.count)
@@ -204,7 +257,13 @@ def match_stage1_with_skips(
         seen[key] = cost
 
         # Acceptance check at current node
-        if accept(node, i, exact_hits, saw_num):
+        acc = accept(node, i, exact_hits, saw_num)
+        if acc:
+            acc_type, reason = acc
+            if debug:
+                debug(
+                    f"[search]{'  '*i} ACCEPT[{acc_type}] uprn={node.uprn} cost={cost} hits={exact_hits} numeric={saw_num} progress={i}/{n} | {reason}"
+                )
             if cost < best_cost:
                 runner_cost = best_cost
                 best_cost = cost
@@ -225,6 +284,17 @@ def match_stage1_with_skips(
         # Exact consume
         child = node.child(tok)
         if child is not None:
+            if debug:
+                indent = '  ' * i
+                debug(
+                    f"[search]{indent} EXACT consume '{tok}': child exists → descend"
+                )
+                debug(
+                    f"[search]{indent}   child(count={child.count}, uprn={child.uprn}); cost stays {cost}; progress {i}/{n}→{i+1}/{n}"
+                )
+                debug(
+                    f"[search]{indent}   remaining L2R: '{rem_l2r(i)}' → '{rem_l2r_after(i)}'; consumed now: '{consumed_l2r_after(i)}'"
+                )
             seq += 1
             heapq.heappush(
                 heap,
@@ -240,6 +310,25 @@ def match_stage1_with_skips(
 
         # Skip messy
         s_cost = skip_cost(node, tok)
+        if debug:
+            indent = '  ' * i
+            c_anchor = int(node.count)
+            c_combo = int(node.child_count(tok))
+            ratio = c_anchor / max(1, c_combo)
+            reason = (
+                f"redundant (ratio={ratio:.2f} ≥ {skip_redundant_ratio})"
+                if c_anchor > c_combo and ratio >= float(skip_redundant_ratio)
+                else f"kept (ratio={ratio:.2f} < {skip_redundant_ratio})"
+            )
+            debug(
+                f"[search]{indent} SKIP '{tok}': cost +{s_cost} — {reason}; progress {i}/{n}→{i+1}/{n}"
+            )
+            debug(
+                f"[search]{indent}   counts: anchor={c_anchor}, child_count={c_combo}"
+            )
+            debug(
+                f"[search]{indent}   remaining L2R: '{rem_l2r(i)}' → '{rem_l2r_after(i)}'"
+            )
         seq += 1
         heapq.heappush(heap, (cost + s_cost, seq, node, i + 1, exact_hits, saw_num))
 
