@@ -9,6 +9,12 @@ from matcher.matcher_stage1 import (
     match_stage1,
     Params,
 )
+from matcher.trace_utils import (
+    Trace,
+    build_alignment_table,
+    render_alignment_text,
+    render_consumed_summary,
+)
 
 
 messy_address, canonical_addresses = get_random_address_data(print_output=False)
@@ -21,23 +27,66 @@ messy_address, canonical_addresses = get_random_address_data(print_output=False)
 # )
 
 
-# --- Build suffix trie from canonical addresses for this postcode block ---
+# Build suffix trie from canonical rows for this postcode block
 root = build_trie_from_canonical(canonical_addresses, reverse=True)
 
+# Build uprn -> canonical tokens map for pretty printing
+uprn_to_tokens = {}
+for row in canonical_addresses:
+    try:
+        uprn = int(row[0])
+        toks = [str(t) for t in row[1]]
+        uprn_to_tokens[uprn] = toks
+    except Exception:
+        pass
 
-# Extract the messy tokens from the input row and run Stage‑1 matcher
-messy_tokens = list(messy_address[1])
-res = match_stage1(messy_tokens, root, Params())
+# Default: enable token swap (adjacent transpose) and canonical insertions
+params = Params(allow_swap_adjacent=True, allow_canonical_insert=True)
 
-# in_postcode = [c for c in canonical_addresses if c[2] == messy_address[2]]
-# [(a[0], " ".join(a[1])) for a in in_postcode]
 
-# import duckdb
-# ddbdf = duckdb.read_parquet(OS_PARQUET)
-# sql = f"""
-# select fulladdress
-# from ddbdf
-# where postcode = '{messy_address[2]}'
-# """
-# duckdb.sql(sql).show()
-# res
+def run_alignment(
+    addr: str, *, title: str | None = None, params_override: Params | None = None
+) -> None:
+    if title:
+        print(f"\n=== {title} ===\n")
+    tokens = addr.split()
+    trace = Trace(enabled=True)
+    res = match_stage1(tokens, root, params_override or params, trace=trace)
+    print(res)
+
+    # Main result: show messy vs canonical clearly at the top
+    messy_line = " ".join(tokens)
+    if res.get("matched") and res.get("uprn") is not None:
+        canon_tokens = uprn_to_tokens.get(int(res["uprn"]))
+        canon_line = (
+            " ".join(canon_tokens) if canon_tokens else "(canonical tokens unavailable)"
+        )
+    else:
+        canon_line = "(no match)"
+    print("Messy:     ", messy_line)
+    print("Canonical: ", canon_line)
+    tbl = build_alignment_table(tokens, trace.events)
+    print(render_alignment_text(tbl))
+    print("\nResult summary:")
+    print(
+        f"  matched={res.get('matched')} uprn={res.get('uprn')} cost={res.get('cost')}"
+    )
+    print(
+        render_consumed_summary(
+            res.get("consumed_path", []),
+            res.get("consumed_path_counts", []),
+            res.get("final_node_count"),
+        )
+    )
+    if "candidate_uprns" in res:
+        print(
+            f"  Candidate UPRNs (≤{res.get('limit_used')}): {res.get('candidate_uprns')}"
+        )
+
+
+# Use the messy tokens from FHRS row
+_uid, messy_tokens, _pc = messy_address
+params_swap = Params(allow_swap_adjacent=True)
+
+addr_text = " ".join(messy_tokens)
+run_alignment(addr_text, params_override=params_swap)
