@@ -90,3 +90,30 @@ def test_canonical_insert_trace_stability(love_lane_root: TrieNode):
         assert table.get("canonical", [])[j] != "—"
     # And condition shows inserted canonical
     assert any("ins=LOVE" in c for c in table.get("condition", []))
+
+
+def test_canonical_insert_missing_north_chain():
+    # Augment canonical with a NORTH branch requiring an inserted token at KINGS
+    canonical = [
+        (1, ["5", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
+        (2, ["9", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
+        (3, ["8", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
+        (4, ["7", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
+        (6, ["6", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
+        (7, ["4", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
+        # Missing-NORTH chain (reusing a UPRN id for simplicity)
+        (700, ["10", "LOVE", "LANE", "NORTH", "KINGS", "LANGLEY"], "WD4 9HW"),
+    ]
+    root = build_trie_from_canonical(canonical, reverse=True)
+    addr = "10 LOVE LANE KINGS LANGLEY"
+    tokens = addr.split()
+    tr = Trace(enabled=True)
+    params = Params()  # default allows insert
+    res = match_stage1(tokens, root, params, trace=tr)
+    assert res["matched"] is True
+    assert res["uprn"] == 700
+    assert res["cost"] == params.canonical_insert_cost
+
+    table = build_alignment_table(tokens, tr.events)
+    # Ensure we note the inserted canonical
+    assert any("ins=NORTH" in c for c in table.get("condition", []))

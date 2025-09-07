@@ -306,6 +306,30 @@ class _RuleFunc(Protocol):
         ...
 
 
+def _can_finish_exact_to_terminal(
+    node: TrieNode, tokens_r2l: Sequence[str], start_i: int
+) -> Tuple[bool, int, Optional[int]]:
+    """Probe whether the exact path from node using tokens[start_i:] reaches a terminal.
+
+    Returns (ok, steps_consumed, uprn_if_ok). No side effects or tracing.
+    """
+    n = len(tokens_r2l)
+    cur = node
+    i = int(start_i)
+    steps = 0
+    while i < n:
+        tok = tokens_r2l[i]
+        ch = cur.child(tok)
+        if ch is None:
+            return (False, steps, None)
+        cur = ch
+        steps += 1
+        i += 1
+    if cur.uprn is not None:
+        return (True, steps, int(cur.uprn))
+    return (False, steps, None)
+
+
 def _rule_exact(state: _State, tokens_r2l: Sequence[str], n: int, params: "Params") -> Iterable[_Move]:
     """Yield an exact-consume Move if the next messy token matches a child.
 
@@ -431,8 +455,9 @@ def _rule_canonical_insert(
     if state.i >= n:
         return
     tok = tokens_r2l[state.i]
-    # Only when stuck: do not fire if an exact child exists now
-    if state.node.child(tok) is not None:
+    # New guard: if the non-insert exact path can finish to a terminal, skip insert
+    ok_no_insert, _, _ = _can_finish_exact_to_terminal(state.node, tokens_r2l, state.i)
+    if ok_no_insert:
         return
 
     # Gather viable (X_label, X_node, Y_node) candidates
@@ -446,7 +471,13 @@ def _rule_canonical_insert(
             continue
         y = x_node.child(tok)
         if y is not None:
-            candidates.append((x_label, x_node, y))
+            # Require that after inserting X and consuming current tok at Y, the
+            # remaining tokens can finish exactly to a terminal.
+            ok_tail, steps_tail, uprn_tail = _can_finish_exact_to_terminal(
+                y, tokens_r2l, state.i + 1
+            )
+            if ok_tail:
+                candidates.append((x_label, x_node, y))
 
     if not candidates:
         return
