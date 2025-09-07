@@ -363,8 +363,22 @@ def match_stage1(
                 else:
                     ordered.append({"action": "STOP_UNKNOWN", "m_index": last_consumed_m_index()})
         else:
-            # already appended accept
-            pass
+            # already appended accept; ensure star sits on the last consumed token
+            # Find last consume step along the ordered path
+            last_consume_idx = None
+            last_consume_label = None
+            for ev in reversed(ordered):
+                a = ev.get("action")
+                if a in ("EXACT_DESCEND", "FUZZY_CONSUME"):
+                    last_consume_idx = int(ev.get("m_index"))
+                    last_consume_label = ev.get("canon")
+                    break
+            if last_consume_idx is not None and ordered:
+                acc_ev = ordered[-1]
+                if str(acc_ev.get("action", "")).startswith("ACCEPT_"):
+                    acc_ev["at_m_index"] = last_consume_idx
+                    if last_consume_label is not None:
+                        acc_ev["accepted_label"] = last_consume_label
 
         for ev in ordered:
             trace.add(ev)
@@ -471,15 +485,22 @@ def _search_with_skips(
                 # Determine accept flavor and mark accept event on this terminal state
                 unique_blocked = node.count == 1 and (i >= n or not node.has_child(t[i]))
                 exact_exhausted = accept_terminal_if_exhausted and i >= n
-                # Compute at_m_index: last consumed token if any, else rightmost
-                if i > 0:
-                    at_m_index = (n - 1) - (i - 1)
-                else:
-                    at_m_index = (n - 1) if n > 0 else 0
+                # Prefer last consumed token index for star placement
+                cur_key_acc: StateKey = (id(node), i, exact_hits, saw_num_any, saw_num_exact)
+                info_here = parents.get(cur_key_acc) or {}
+                cons_idx = info_here.get("last_consume_m_index")
+                acc_label = info_here.get("last_canon_label")
+                if cons_idx is None:
+                    # Fallback: last consumed by i if available
+                    cons_idx = (n - 1) - (i - 1) if i > 0 else ((n - 1) if n > 0 else 0)
+                    if acc_label is None and i > 0:
+                        acc_label = t[i - 1]
+
                 ev_acc = {
                     "action": "ACCEPT_UNIQUE" if unique_blocked else "ACCEPT_TERMINAL",
                     "uprn": int(node.uprn) if node.uprn is not None else None,
-                    "at_m_index": int(at_m_index),
+                    "at_m_index": int(cons_idx),
+                    "accepted_label": acc_label,
                     "unique_blocked": bool(unique_blocked),
                     "exact_exhausted": bool(exact_exhausted),
                     "node_count": int(node.count),
@@ -492,7 +513,6 @@ def _search_with_skips(
                         "numeric_must_be_exact": bool(numeric_must_be_exact),
                     },
                 }
-                cur_key_acc: StateKey = (id(node), i, exact_hits, saw_num_any, saw_num_exact)
                 # Preserve existing transition event; attach accept info alongside
                 info = parents.get(cur_key_acc)
                 if info is None:

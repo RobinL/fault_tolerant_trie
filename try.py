@@ -111,6 +111,12 @@ print("\n" + "-" * 80 + "\n")
 addr7 = "KIMS NAILS 4 LOVE LANE KINSG LANGLEY HERTFORDSHIRE ENGLAND"
 run_alignment(addr7, title="Fuzzy: transpose KINSG → KINGS")
 
-# Case 7: fuzzy consume (adjacent transpose KINSG → KINGS)
-addr7 = "KIMS NAILS 4 LOVE LANE KINGS  HERTFORDSHIRE ENGLAND"
-run_alignment(addr7, title="Fuzzy: transpose KINSG → KINGS")
+print("\n" + "-" * 80 + "\n")
+
+# Case 8: skip after accept scenario (ANNEXE after 7)
+addr8 = "ANNEXE 7 LOVE LANE KINGS LANGLEY"
+run_alignment(addr8, title="Skip after accept: ANNEXE after 7 (star under 7)")
+
+
+addr9 = "ANNEX 7 LOVE LANE KINGS LANGLEY"
+run_alignment(addr9)

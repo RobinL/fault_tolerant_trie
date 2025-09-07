@@ -157,6 +157,9 @@ def build_alignment_table(tokens_l2r: Sequence[str], events: List[Event]) -> Dic
         if ev.get("action") in ("ACCEPT_UNIQUE", "ACCEPT_TERMINAL"):
             j = col_from_m_index(int(ev["at_m_index"]))
             action[j] = ICONS["star"]
+            # If we know which canonical label was accepted, show it in the star column
+            if ev.get("accepted_label"):
+                canonical[j] = str(ev.get("accepted_label"))
             reason[j] = "unique leaf" if ev["action"] == "ACCEPT_UNIQUE" else "terminal"
             if ev.get("action") == "ACCEPT_UNIQUE":
                 cnt = ev.get("node_count"); nxt = ev.get("next_child_exists")
@@ -165,10 +168,10 @@ def build_alignment_table(tokens_l2r: Sequence[str], events: List[Event]) -> Dic
                 hits = ev.get("exact_hits"); saw = ev.get("saw_num_exact")
                 set_if_empty(j, f"terminal (hits={hits}, num_exact={bool(saw)})")
 
-            # Mark post-accept leftover tokens to the left in R→L
+            # Mark post-accept tokens to the right in the R→L display (override reasons)
             for k in range(j + 1, n):
-                if reason[k] == "":
-                    reason[k] = "post-accept"
+                reason[k] = "post-accept"
+                action[k] = ICONS["dot"]
             break  # only one accept per path
 
     return {
