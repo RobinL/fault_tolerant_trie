@@ -265,7 +265,7 @@ def match_stage1(
         trace=trace,
     )
 
-    # Step 4: if tracing is enabled, reconstruct the chosen path
+    # Reconstruct chosen path whenever we have a best_state (accept or partial)
     if trace is not None and best_state is not None and parents is not None:
         ordered: List[Dict[str, Any]] = []
         cur = best_state
@@ -281,27 +281,58 @@ def match_stage1(
             cur = nxt
         ordered.reverse()
 
-        # Ensure we have a terminal ACCEPT_* event
-        if not ordered or not str(ordered[-1].get("action", "")).startswith("ACCEPT_"):
-            # Prefer accept event captured during search, if available
-            acc_info = parents.get(best_state, {}) if parents is not None else {}
-            ev_acc = acc_info.get("accept_event")
-            if ev_acc is not None:
-                ordered.append(ev_acc)
-            else:
-                # Fallback to computing accept index and assume unique
-                _, i_consumed, _exact_hits, _any_num, _exact_num = best_state
-                n = len(peeled)
-                if int(i_consumed) > 0:
-                    at_m_index = (n - 1) - (int(i_consumed) - 1)
-                else:
-                    at_m_index = n - 1 if n > 0 else 0
-                if uprn is not None:
+        # Append ACCEPT if captured on the best_state (takes precedence)
+        acc_info = parents.get(best_state, {})
+        ev_acc = acc_info.get("accept_event")
+        if ev_acc is not None:
+            ordered.append(ev_acc)
+
+        # Determine if we already have an ACCEPT_* at the end
+        has_accept = bool(ordered and str(ordered[-1].get("action", "")).startswith("ACCEPT_"))
+
+        if not has_accept:
+            # Diagnose a stop condition and add a STOP_* marker
+            info_best = parents.get(best_state, {})
+            node = info_best.get("node")
+            # Unpack state
+            _, i_consumed, exact_hits, saw_any, saw_exact = best_state
+            t_r2l = list(reversed(peeled))
+            n = len(t_r2l)
+
+            def last_consumed_m_index() -> int:
+                return (n - 1) - (int(i_consumed) - 1) if int(i_consumed) > 0 else (n - 1 if n > 0 else 0)
+
+            # If the last step was a SKIP_*, prefer STOP_NO_CHILD on that column
+            if ordered and str(ordered[-1].get("action", "")).startswith("SKIP_"):
+                ordered.append({
+                    "action": "STOP_NO_CHILD",
+                    "m_index": int(ordered[-1]["m_index"]),
+                })
+            elif int(i_consumed) < n and node is not None:
+                next_tok = t_r2l[i_consumed]
+                if not node.has_child(next_tok):
                     ordered.append({
-                        "action": "ACCEPT_UNIQUE",
-                        "uprn": int(uprn),
-                        "at_m_index": int(at_m_index),
+                        "action": "STOP_NO_CHILD",
+                        "m_index": (n - 1) - int(i_consumed),
+                        "messy": next_tok,
                     })
+                else:
+                    if params.require_numeric and not (saw_exact if params.numeric_must_be_exact else saw_any):
+                        ordered.append({"action": "STOP_GUARD_NUMERIC", "m_index": last_consumed_m_index()})
+                    elif exact_hits < params.min_exact_hits:
+                        ordered.append({"action": "STOP_GUARD_MIN_EXACT", "m_index": last_consumed_m_index()})
+                    elif node.uprn is not None and node.count > 1:
+                        ordered.append({"action": "STOP_AMBIGUOUS", "m_index": last_consumed_m_index()})
+                    else:
+                        ordered.append({"action": "STOP_UNKNOWN", "m_index": last_consumed_m_index()})
+            else:
+                if node is not None and node.uprn is None:
+                    ordered.append({"action": "STOP_INCOMPLETE", "m_index": last_consumed_m_index()})
+                else:
+                    ordered.append({"action": "STOP_UNKNOWN", "m_index": last_consumed_m_index()})
+        else:
+            # already appended accept
+            pass
 
         for ev in ordered:
             trace.add(ev)
@@ -371,6 +402,21 @@ def _search_with_skips(
     seen: dict[tuple[int, int, int, bool, bool], int] = {}
     best_state: Optional[StateKey] = None
 
+    # Track best partial even if no accept
+    best_partial_key: Optional[StateKey] = None
+    best_partial_cost: float = float("inf")
+
+    def better_partial(c_cost: int, c_exact: int, c_i: int,
+                       b_cost: float, b_key: Optional[StateKey]) -> bool:
+        if c_cost != b_cost:
+            return c_cost < b_cost
+        if b_key is None:
+            return True
+        _, b_i, b_exact, _, _ = b_key
+        if c_exact != b_exact:
+            return c_exact > b_exact
+        return c_i > b_i
+
     while heap:
         cost, _, node, i, exact_hits, saw_num_any, saw_num_exact = heapq.heappop(heap)
         if cost > max_cost:
@@ -380,6 +426,12 @@ def _search_with_skips(
         if prev is not None and prev <= cost:
             continue
         seen[key] = cost
+
+        # Update best-partial on pop
+        key = (id(node), i, exact_hits, saw_num_any, saw_num_exact)
+        if better_partial(cost, exact_hits, i, best_partial_cost, best_partial_key):
+            best_partial_cost = cost
+            best_partial_key = key
 
         acc = accept(node, i, exact_hits, saw_num_exact if numeric_must_be_exact else saw_num_any)
         if acc:
@@ -401,9 +453,10 @@ def _search_with_skips(
                 # Preserve existing transition event; attach accept info alongside
                 info = parents.get(cur_key_acc)
                 if info is None:
-                    parents[cur_key_acc] = {"parent": None, "event": None, "accept_event": ev_acc}
+                    parents[cur_key_acc] = {"parent": None, "event": None, "accept_event": ev_acc, "node": node}
                 else:
                     info["accept_event"] = ev_acc
+                    info.setdefault("node", node)
             if cost < best_cost:
                 runner_cost = best_cost
                 best_cost = cost
@@ -448,7 +501,7 @@ def _search_with_skips(
                 }
                 prev = parents.get(next_key)
                 if prev is None or prev.get("g_cost", 1e9) > cost:
-                    parents[next_key] = {"parent": cur_key, "event": ev, "g_cost": cost}
+                    parents[next_key] = {"parent": cur_key, "event": ev, "g_cost": cost, "node": child}
 
         s_cost = skip_cost(node, tok)
         seq += 1
@@ -465,7 +518,7 @@ def _search_with_skips(
                 ev2.update({"anchor_count": int(node.count), "child_count": int(node.child_count(tok))})
             prev2 = parents.get(next_key2)
             if prev2 is None or prev2.get("g_cost", 1e9) > cost + s_cost:
-                parents[next_key2] = {"parent": cur_key2, "event": ev2, "g_cost": cost + s_cost}
+                parents[next_key2] = {"parent": cur_key2, "event": ev2, "g_cost": cost + s_cost, "node": node}
 
         if child is None:
             for lbl, ch in node.iter_children():
@@ -498,7 +551,7 @@ def _search_with_skips(
                         }
                         prev3 = parents.get(next_key3)
                         if prev3 is None or prev3.get("g_cost", 1e9) > cost + 1:
-                            parents[next_key3] = {"parent": cur_key3, "event": ev3, "g_cost": cost + 1}
+                            parents[next_key3] = {"parent": cur_key3, "event": ev3, "g_cost": cost + 1, "node": ch}
 
     if (
         best_uprn is not None
@@ -512,4 +565,7 @@ def _search_with_skips(
             (best_state if trace is not None else None),
             (parents if trace is not None else None),
         )
+    # If no accept, still provide best partial for tracing
+    if trace is not None and best_partial_key is not None:
+        return (None, None, None, best_partial_key, parents)
     return (None, None, None, None, None)

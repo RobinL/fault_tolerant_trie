@@ -53,6 +53,9 @@ params = Params()  # defaults: strict guards, numeric must be exact
 
 addr = "KIMS NAILS 4 LOVE LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND"
 
+
+addr = "500 LOVE LANE KINGS LANGLEY ENGLAND"
+
 tokens = addr.split()
 
 # Step 2 verification: demonstrate PEEL_TAIL tracing

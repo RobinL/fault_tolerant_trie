@@ -28,6 +28,7 @@ ICONS = {
     "star": "✓★",
     "peel": "⌫",
     "dot": "·",
+    "stop": "×",
 }
 
 DASH = "—"
@@ -81,6 +82,20 @@ def build_alignment_table(tokens_l2r: Sequence[str], events: List[Event]) -> Dic
             j = col_from_m_index(int(ev["m_index"]))
             action[j] = ICONS["dot"]
             reason[j] = "skip"
+        elif a and str(a).startswith("STOP_"):
+            j = col_from_m_index(int(ev["m_index"]))
+            action[j] = ICONS["stop"]
+            reason_map = {
+                "STOP_NO_CHILD": "no-child",
+                "STOP_INCOMPLETE": "incomplete",
+                "STOP_AMBIGUOUS": "ambiguous",
+                "STOP_GUARD_NUMERIC": "guard:numeric",
+                "STOP_GUARD_MIN_EXACT": "guard:exact",
+                "STOP_BUDGET": "budget",
+                "STOP_TIE": "tie",
+                "STOP_UNKNOWN": "stop",
+            }
+            reason[j] = reason_map.get(a, "stop")
 
     # Finally, mark acceptance star at the consumed token column
     for ev in events:
@@ -124,4 +139,3 @@ def render_alignment_text(table: Dict[str, List[str]]) -> str:
             parts.append(str(v).rjust(widths[i] + 2))
         lines.append("".join(parts))
     return "\n".join(lines)
-
