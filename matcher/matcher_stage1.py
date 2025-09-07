@@ -304,9 +304,15 @@ def match_stage1(
 
             # If the last step was a SKIP_*, prefer STOP_NO_CHILD on that column
             if ordered and str(ordered[-1].get("action", "")).startswith("SKIP_"):
+                last_ev = ordered[-1]
+                msg_tok = last_ev.get("messy")
+                cc = int(node.child_count(msg_tok)) if (node is not None and msg_tok is not None) else None
                 ordered.append({
                     "action": "STOP_NO_CHILD",
                     "m_index": int(ordered[-1]["m_index"]),
+                    "messy": msg_tok,
+                    "anchor_count": (int(node.count) if node is not None else None),
+                    "child_count": (int(cc) if cc is not None else 0),
                 })
             elif int(i_consumed) < n and node is not None:
                 next_tok = t_r2l[i_consumed]
@@ -315,19 +321,45 @@ def match_stage1(
                         "action": "STOP_NO_CHILD",
                         "m_index": (n - 1) - int(i_consumed),
                         "messy": next_tok,
+                        "anchor_count": int(node.count),
+                        "child_count": 0,
                     })
                 else:
                     if params.require_numeric and not (saw_exact if params.numeric_must_be_exact else saw_any):
-                        ordered.append({"action": "STOP_GUARD_NUMERIC", "m_index": last_consumed_m_index()})
+                        ordered.append({
+                            "action": "STOP_GUARD_NUMERIC",
+                            "m_index": last_consumed_m_index(),
+                            "require_numeric": True,
+                            "numeric_must_be_exact": params.numeric_must_be_exact,
+                            "saw_num_exact": bool(saw_exact),
+                            "saw_num_any": bool(saw_any),
+                        })
                     elif exact_hits < params.min_exact_hits:
-                        ordered.append({"action": "STOP_GUARD_MIN_EXACT", "m_index": last_consumed_m_index()})
+                        ordered.append({
+                            "action": "STOP_GUARD_MIN_EXACT",
+                            "m_index": last_consumed_m_index(),
+                            "exact_hits": int(exact_hits),
+                            "min_exact_hits": int(params.min_exact_hits),
+                        })
                     elif node.uprn is not None and node.count > 1:
-                        ordered.append({"action": "STOP_AMBIGUOUS", "m_index": last_consumed_m_index()})
+                        ordered.append({
+                            "action": "STOP_AMBIGUOUS",
+                            "m_index": last_consumed_m_index(),
+                            "node_count": int(node.count),
+                        })
                     else:
-                        ordered.append({"action": "STOP_UNKNOWN", "m_index": last_consumed_m_index()})
+                        ordered.append({
+                            "action": "STOP_UNKNOWN",
+                            "m_index": last_consumed_m_index(),
+                            "node_count": (int(node.count) if node is not None else None),
+                        })
             else:
                 if node is not None and node.uprn is None:
-                    ordered.append({"action": "STOP_INCOMPLETE", "m_index": last_consumed_m_index()})
+                    ordered.append({
+                        "action": "STOP_INCOMPLETE",
+                        "m_index": last_consumed_m_index(),
+                        "node_count": int(node.count),
+                    })
                 else:
                     ordered.append({"action": "STOP_UNKNOWN", "m_index": last_consumed_m_index()})
         else:
@@ -448,6 +480,17 @@ def _search_with_skips(
                     "action": "ACCEPT_UNIQUE" if unique_blocked else "ACCEPT_TERMINAL",
                     "uprn": int(node.uprn) if node.uprn is not None else None,
                     "at_m_index": int(at_m_index),
+                    "unique_blocked": bool(unique_blocked),
+                    "exact_exhausted": bool(exact_exhausted),
+                    "node_count": int(node.count),
+                    "next_child_exists": bool(i < n and (node.has_child(t[i]) if i < n else False)),
+                    "exact_hits": int(exact_hits),
+                    "saw_num_exact": bool(saw_num_exact),
+                    "guards": {
+                        "min_exact_hits": int(min_exact_hits),
+                        "require_numeric": bool(require_numeric),
+                        "numeric_must_be_exact": bool(numeric_must_be_exact),
+                    },
                 }
                 cur_key_acc: StateKey = (id(node), i, exact_hits, saw_num_any, saw_num_exact)
                 # Preserve existing transition event; attach accept info alongside
@@ -501,10 +544,14 @@ def _search_with_skips(
                 }
                 prev = parents.get(next_key)
                 if prev is None or prev.get("g_cost", 1e9) > cost:
+                    ev["anchor_count"] = int(node.count)
                     parents[next_key] = {"parent": cur_key, "event": ev, "g_cost": cost, "node": child}
 
         s_cost = skip_cost(node, tok)
         seq += 1
+        anchor_count_val = int(node.count)
+        child_count_val = int(node.child_count(tok))
+        ratio_val = anchor_count_val / max(1, child_count_val)
         heapq.heappush(
             heap,
             (cost + s_cost, seq, node, i + 1, exact_hits, saw_num_any, saw_num_exact),
@@ -513,9 +560,15 @@ def _search_with_skips(
             cur_key2: StateKey = (id(node), i, exact_hits, saw_num_any, saw_num_exact)
             next_key2: StateKey = (id(node), i + 1, exact_hits, saw_num_any, saw_num_exact)
             m_index2 = (n - 1) - i
-            ev2 = {"action": "SKIP_REDUNDANT" if s_cost == 0 else "SKIP_PENALIZED", "messy": tok, "m_index": m_index2}
-            if s_cost == 0:
-                ev2.update({"anchor_count": int(node.count), "child_count": int(node.child_count(tok))})
+            ev2 = {
+                "action": "SKIP_REDUNDANT" if s_cost == 0 else "SKIP_PENALIZED",
+                "messy": tok,
+                "m_index": m_index2,
+                "anchor_count": anchor_count_val,
+                "child_count": child_count_val,
+                "ratio": float(ratio_val),
+                "threshold": float(skip_redundant_ratio),
+            }
             prev2 = parents.get(next_key2)
             if prev2 is None or prev2.get("g_cost", 1e9) > cost + s_cost:
                 parents[next_key2] = {"parent": cur_key2, "event": ev2, "g_cost": cost + s_cost, "node": node}
