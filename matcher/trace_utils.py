@@ -74,6 +74,12 @@ def build_alignment_table(tokens_l2r: Sequence[str], events: List[Event]) -> Dic
             action[j] = ICONS["exact"]
             canonical[j] = str(ev.get("canon", DASH))
             reason[j] = "exact"
+        elif a == "FUZZY_CONSUME":
+            j = col_from_m_index(int(ev["m_index"]))
+            action[j] = ICONS["exact"]
+            canonical[j] = str(ev.get("canon", DASH))
+            edit_type = ev.get("edit_type")
+            reason[j] = f"fuzzy:{edit_type}" if edit_type else "fuzzy"
         elif a == "SKIP_REDUNDANT":
             j = col_from_m_index(int(ev["m_index"]))
             action[j] = ICONS["dot"]

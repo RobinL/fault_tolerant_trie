@@ -409,7 +409,7 @@ Reason:        peel         peel        exact      exact     exact   redundant  
 
 ---
 
-## Step 8 — Tests (lightweight)
+## Step 8 — Tests (lightweight) [DONE]
 
 **Files:** `tests/test_trace_alignment.py` (new)
 
@@ -426,7 +426,7 @@ Reason:        peel         peel        exact      exact     exact   redundant  
 
 ---
 
-## Step 9 — Keep trace optional & non-invasive
+## Step 9 — Keep trace optional & non-invasive [DONE]
 
 * Ensure all new params default to `None` and tracing **does not alter** match results.
 * Keep **no prints** in matcher; only return events.
@@ -434,7 +434,7 @@ Reason:        peel         peel        exact      exact     exact   redundant  
 
 ---
 
-## Step 10 — (Optional next) Add FUZZY events
+## Step 10 — (Optional next) Add FUZZY events [DONE]
 
 When you’re ready:
 

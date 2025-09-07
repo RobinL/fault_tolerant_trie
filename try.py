@@ -51,29 +51,66 @@ root = build_trie_from_canonical(canonical_love_lane, reverse=True)
 params = Params()  # defaults: strict guards, numeric must be exact
 
 
-def run_alignment(addr: str) -> None:
+def run_alignment(
+    addr: str, *, params_override: Params | None = None, title: str | None = None
+) -> None:
+    if title:
+        print(f"\n=== {title} ===\n")
     tokens = addr.split()
     trace = Trace(enabled=True)
 
-    _ = match_stage1(tokens, root, params, trace=trace)
+    # Then run matcher and show full alignment
+    _ = match_stage1(tokens, root, params_override or params, trace=trace)
     tbl = build_alignment_table(tokens, trace.events)
     print()
     print(render_alignment_text(tbl))
 
 
-# Case 1: baseline success (no EXTRA)
+# Case 1: baseline success (unique leaf on 4)
 addr1 = "KIMS NAILS 4 LOVE LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND"
-run_alignment(addr1)
+run_alignment(addr1, title="Success: unique leaf at 4")
 
 print("\n" + "-" * 80 + "\n")
 
-# Case 2: with EXTRA (redundant skip)
+# Case 2: redundant skip (EXTRA between LOVE and LANE)
 addr2 = "KIMS NAILS 4 LOVE EXTRA LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND"
-run_alignment(addr2)
-
+run_alignment(addr2, title="Redundant skip: EXTRA between LOVE and LANE")
 
 print("\n" + "-" * 80 + "\n")
 
-# Case 3: with EXTRA (redundant skip)
-addr2 = "500 LOVE EXTRA LANE KINGS LANGLEY HERTS ENGLAND"
-run_alignment(addr2)
+# Case 3: terminal accept on 7
+addr3 = "KIMS NAILS 7 LOVE LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND"
+run_alignment(addr3, title="Terminal accept: exhausted at 7")
+
+print("\n" + "-" * 80 + "\n")
+
+# Case 4: penalized skip by raising redundancy threshold → EXTRA counted as skip
+addr4 = "KIMS NAILS 4 LOVE EXTRA LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND"
+params_penalized = Params(skip_redundant_ratio=100.0)
+run_alignment(
+    addr4,
+    params_override=params_penalized,
+    title="Penalized skip: EXTRA counted as skip (not redundant)",
+)
+
+print("\n" + "-" * 80 + "\n")
+
+# Case 5: stop with no child (unknown house number)
+addr5 = "KIMS NAILS 500 LOVE LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND"
+run_alignment(addr5, title="Stop: no child for 500 (no-child)")
+
+print("\n" + "-" * 80 + "\n")
+
+# Case 6: stop incomplete (no number present)
+addr6 = "KIMS NAILS LOVE LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND"
+run_alignment(addr6, title="Stop: incomplete (no terminal UPRN)")
+
+print("\n" + "-" * 80 + "\n")
+
+# Case 7: fuzzy consume (adjacent transpose KINSG → KINGS)
+addr7 = "KIMS NAILS 4 LOVE LANE KINSG LANGLEY HERTFORDSHIRE ENGLAND"
+run_alignment(addr7, title="Fuzzy: transpose KINSG → KINGS")
+
+# Case 7: fuzzy consume (adjacent transpose KINSG → KINGS)
+addr7 = "KIMS NAILS 4 LOVE LANE KINGS  HERTFORDSHIRE ENGLAND"
+run_alignment(addr7, title="Fuzzy: transpose KINSG → KINGS")
