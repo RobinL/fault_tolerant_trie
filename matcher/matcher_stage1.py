@@ -218,6 +218,7 @@ def match_stage1_with_skips(
     min_exact_hits: int = 2,
     require_numeric: bool = True,
     numeric_must_be_exact: bool = True,
+    accept_unique_subtree_if_blocked: bool = False,
     skip_redundant_ratio: float = 2.0,
     accept_terminal_if_exhausted: bool = True,
     trace: Optional[Trace] = None,
@@ -230,6 +231,7 @@ def match_stage1_with_skips(
         min_exact_hits=min_exact_hits,
         require_numeric=require_numeric,
         numeric_must_be_exact=numeric_must_be_exact,
+        accept_unique_subtree_if_blocked=accept_unique_subtree_if_blocked,
         skip_redundant_ratio=skip_redundant_ratio,
         accept_terminal_if_exhausted=accept_terminal_if_exhausted,
         allow_swap_adjacent=False,
@@ -251,6 +253,7 @@ class Params:
     numeric_must_be_exact: bool = True
     skip_redundant_ratio: float = 2.0
     accept_terminal_if_exhausted: bool = True
+    accept_unique_subtree_if_blocked: bool = False
     max_uprns_to_return: int = 10
     allow_swap_adjacent: bool = False
     swap_cost: int = 1
@@ -586,6 +589,7 @@ def match_stage1(
         min_exact_hits=params.min_exact_hits,
         require_numeric=params.require_numeric,
         numeric_must_be_exact=params.numeric_must_be_exact,
+        accept_unique_subtree_if_blocked=params.accept_unique_subtree_if_blocked,
         skip_redundant_ratio=params.skip_redundant_ratio,
         accept_terminal_if_exhausted=params.accept_terminal_if_exhausted,
         allow_swap_adjacent=params.allow_swap_adjacent,
@@ -769,6 +773,7 @@ def _search_with_skips(
     min_exact_hits: int = 2,
     require_numeric: bool = True,
     numeric_must_be_exact: bool = True,
+    accept_unique_subtree_if_blocked: bool = False,
     skip_redundant_ratio: float = 2.0,
     accept_terminal_if_exhausted: bool = True,
     allow_swap_adjacent: bool = False,
@@ -951,6 +956,65 @@ def _search_with_skips(
             if heap and heap[0][0] >= best_cost + 1:
                 break
             continue
+
+        # Optional unique-subtree acceptance (non-terminal unique & blocked)
+        if accept_unique_subtree_if_blocked and node.uprn is None and int(node.count) == 1:
+            blocked = (i >= n) or (not node.has_child(t[i]))
+            guards_ok = (exact_hits >= min_exact_hits) and (not require_numeric or (saw_num_exact if numeric_must_be_exact else saw_num_any))
+            if blocked and guards_ok:
+                unique_uprn: Optional[int] = None
+                try:
+                    from .trace_utils import collect_uprns as _collect
+                    cands = _collect(node, 2)
+                    if len(cands) == 1:
+                        unique_uprn = int(cands[0])
+                except Exception:
+                    unique_uprn = None
+                if unique_uprn is not None:
+                    if trace is not None:
+                        # Determine star placement based on last consume
+                        cur_key_acc: StateKey = (id(node), i, exact_hits, saw_num_any, saw_num_exact)
+                        info_here = parents.get(cur_key_acc) or {}
+                        cons_idx = info_here.get("last_consume_m_index")
+                        acc_label = info_here.get("last_canon_label")
+                        if cons_idx is None:
+                            cons_idx = (n - 1) - (i - 1) if i > 0 else ((n - 1) if n > 0 else 0)
+                            if acc_label is None and i > 0:
+                                acc_label = t[i - 1]
+                        ev_acc = {
+                            "action": "ACCEPT_UNIQUE",
+                            "uprn": unique_uprn,
+                            "at_m_index": int(cons_idx),
+                            "accepted_label": acc_label,
+                            "unique_blocked": True,
+                            "exact_exhausted": bool((i >= n) and accept_terminal_if_exhausted),
+                            "node_count": int(node.count),
+                            "next_child_exists": bool(i < n and (node.has_child(t[i]) if i < n else False)),
+                            "exact_hits": int(exact_hits),
+                            "saw_num_exact": bool(saw_num_exact),
+                            "guards": {
+                                "min_exact_hits": int(min_exact_hits),
+                                "require_numeric": bool(require_numeric),
+                                "numeric_must_be_exact": bool(numeric_must_be_exact),
+                            },
+                        }
+                        info = parents.get(cur_key_acc)
+                        if info is None:
+                            parents[cur_key_acc] = {"parent": None, "event": None, "accept_event": ev_acc, "node": node}
+                        else:
+                            info["accept_event"] = ev_acc
+                            info.setdefault("node", node)
+                    if cost < best_cost:
+                        runner_cost = best_cost
+                        best_cost = cost
+                        best_uprn = unique_uprn
+                        if trace is not None:
+                            best_state = (id(node), i, exact_hits, saw_num_any, saw_num_exact)
+                    elif unique_uprn != best_uprn and cost < runner_cost:
+                        runner_cost = cost
+                    if heap and heap[0][0] >= best_cost + 1:
+                        break
+                    continue
 
         if i >= n:
             continue

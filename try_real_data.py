@@ -40,8 +40,12 @@ for row in canonical_addresses:
     except Exception:
         pass
 
-# Default: enable token swap (adjacent transpose) and canonical insertions
-params = Params(allow_swap_adjacent=True, allow_canonical_insert=True)
+# Default: enable token swap, canonical insertions, and unique-subtree acceptance
+params = Params(
+    allow_swap_adjacent=True,
+    allow_canonical_insert=True,
+    accept_unique_subtree_if_blocked=True,
+)
 
 
 def run_alignment(
