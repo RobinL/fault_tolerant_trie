@@ -1,4 +1,4 @@
-from matcher.trie_builder import build_trie_from_canonical
+from matcher.trie_builder import build_trie_from_canonical, ascii_lines
 from matcher.matcher_stage1 import (
     peel_end_tokens_with_trie,
     match_stage1_exact_only,
@@ -38,10 +38,14 @@ canonical_love_lane = [
     (5, ["ANNEX", "7", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
     (6, ["6", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
     (7, ["4", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
+    (8, ["10", "LOVE", "LANE", "NORTH", "KINGS", "LANGLEY"], "WD4 9HW"),
+    (9, ["11", "LOVE", "LANE", "NORTH", "KINGS", "LANGLEY"], "WD4 9HW"),
+    (10, ["12", "LOVE", "LANE", "NORTH", "KINGS", "LANGLEY"], "WD4 9HW"),
+    (11, ["13", "LOVE", "LANE", "NORTH", "KINGS", "LANGLEY"], "WD4 9HW"),
 ]
 root = build_trie_from_canonical(canonical_love_lane, reverse=True)
 
-
+print(ascii_lines(root))
 # addr = "20 Essex Close Bletchley, Milton Keynes"
 # pc = "MK3 7ET"
 
@@ -149,3 +153,8 @@ run_alignment(
     params_override=params_swap,
     title="Swap adjacent: LANE↔LOVE (enabled)",
 )
+
+
+params_insert = Params(allow_canonical_insert=True)
+addr9 = "10 LOVE LANE KINGS LANGLEY"
+run_alignment(addr9, params_override=params_insert, title="Check canonical insert")
