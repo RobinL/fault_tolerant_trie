@@ -49,7 +49,7 @@ Below is a **step‑by‑step, implementation‑ready plan** for refactoring you
 
 ---
 
-## Step 3 — Factor a single push helper (behavior‑preserving)
+## Step 3 — Factor a single push helper (behavior‑preserving) [DONE]
 
 **File:** `matcher/matcher_stage1.py`
 

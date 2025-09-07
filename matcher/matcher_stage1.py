@@ -561,6 +561,49 @@ def _search_with_skips(
             return c_exact > b_exact
         return c_i > b_i
 
+    # Step 3: local push helper for moves
+    def push_move(cur_state: State, base_cost: int, move: Move) -> None:
+        nonlocal seq
+        new_cost = base_cost + int(move.cost_delta)
+        new_i = cur_state.i + int(move.i_delta)
+        new_exact = cur_state.exact_hits + int(move.exact_delta)
+        new_any = bool(move.saw_num_any)
+        new_exact_flag = bool(move.saw_num_exact)
+        seq += 1
+        heapq.heappush(
+            heap,
+            (new_cost, seq, move.node, new_i, new_exact, new_any, new_exact_flag),
+        )
+        if trace is not None:
+            cur_key_l: StateKey = (
+                id(cur_state.node),
+                cur_state.i,
+                cur_state.exact_hits,
+                cur_state.saw_num_any,
+                cur_state.saw_num_exact,
+            )
+            next_key_l: StateKey = (
+                id(move.node),
+                new_i,
+                new_exact,
+                new_any,
+                new_exact_flag,
+            )
+            prev_l = parents.get(next_key_l)
+            if prev_l is None or prev_l.get("g_cost", 1e9) > new_cost:
+                entry: Dict[str, Any] = {
+                    "parent": cur_key_l,
+                    "event": move.event,
+                    "g_cost": new_cost,
+                    "node": move.node,
+                }
+                if move.event.get("action") in ("EXACT_DESCEND", "FUZZY_CONSUME"):
+                    if move.last_consume_m_index is not None:
+                        entry["last_consume_m_index"] = int(move.last_consume_m_index)
+                    if move.last_canon_label is not None:
+                        entry["last_canon_label"] = str(move.last_canon_label)
+                parents[next_key_l] = entry
+
     while heap:
         cost, _, node, i, exact_hits, saw_num_any, saw_num_exact = heapq.heappop(heap)
         if cost > max_cost:
@@ -636,34 +679,34 @@ def _search_with_skips(
         tok = t[i]
         child = node.child(tok)
         if child is not None:
-            seq += 1
-            heapq.heappush(
-                heap,
-                (
-                    cost,
-                    seq,
-                    child,
-                    i + 1,
-                    exact_hits + 1,
-                    saw_num_any or is_numeric(tok),
-                    saw_num_exact or is_numeric(tok),
-                ),
+            m_index = (n - 1) - i
+            ev = {
+                "action": "EXACT_DESCEND",
+                "messy": tok,
+                "canon": tok,
+                "m_index": m_index,
+                "child_count": child.count,
+                "anchor_count": int(node.count),
+            }
+            cur_state = State(
+                node=node,
+                i=i,
+                exact_hits=exact_hits,
+                saw_num_any=saw_num_any,
+                saw_num_exact=saw_num_exact,
             )
-            if trace is not None:
-                cur_key: StateKey = (id(node), i, exact_hits, saw_num_any, saw_num_exact)
-                next_key: StateKey = (id(child), i + 1, exact_hits + 1, saw_num_any or is_numeric(tok), saw_num_exact or is_numeric(tok))
-                m_index = (n - 1) - i
-                ev = {
-                    "action": "EXACT_DESCEND",
-                    "messy": tok,
-                    "canon": tok,
-                    "m_index": m_index,
-                    "child_count": child.count,
-                }
-                prev = parents.get(next_key)
-                if prev is None or prev.get("g_cost", 1e9) > cost:
-                    ev["anchor_count"] = int(node.count)
-                    parents[next_key] = {"parent": cur_key, "event": ev, "g_cost": cost, "node": child}
+            move = Move(
+                node=child,
+                i_delta=1,
+                exact_delta=1,
+                saw_num_any=(saw_num_any or is_numeric(tok)),
+                saw_num_exact=(saw_num_exact or is_numeric(tok)),
+                cost_delta=0,
+                event=ev,
+                last_consume_m_index=m_index,
+                last_canon_label=tok,
+            )
+            push_move(cur_state, cost, move)
 
         s_cost = _calc_skip_cost(node, tok, skip_redundant_ratio)
         seq += 1
