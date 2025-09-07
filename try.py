@@ -61,5 +61,8 @@ _peeled = peel_end_tokens_with_trie(tokens, root, steps=4, max_k=2, trace=trace)
 tbl = build_alignment_table(tokens, trace.events)
 print(render_alignment_text(tbl))
 
-# Existing demo of Stage‑1 API (unchanged behavior)
-_ = match_stage1(tokens, root, params)
+# Run Stage‑1 with tracing to add EXACT_DESCEND/ACCEPT events, then render again
+_ = match_stage1(tokens, root, params, trace=trace)
+tbl = build_alignment_table(tokens, trace.events)
+print()
+print(render_alignment_text(tbl))
