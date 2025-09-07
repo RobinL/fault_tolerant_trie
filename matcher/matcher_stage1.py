@@ -204,9 +204,10 @@ def match_stage1_with_skips(
     numeric_must_be_exact: bool = True,
     skip_redundant_ratio: float = 2.0,
     accept_terminal_if_exhausted: bool = True,
+    trace: Optional[Trace] = None,
 ) -> Optional[int]:
     """Wrapper around the internal search to return just the UPRN."""
-    uprn, best_cost, runner_cost = _search_with_skips(
+    uprn, best_cost, runner_cost, _best_state, _parents = _search_with_skips(
         tokens_L2R,
         root,
         max_cost=max_cost,
@@ -215,6 +216,7 @@ def match_stage1_with_skips(
         numeric_must_be_exact=numeric_must_be_exact,
         skip_redundant_ratio=skip_redundant_ratio,
         accept_terminal_if_exhausted=accept_terminal_if_exhausted,
+        trace=trace,
     )
     return uprn
 
@@ -237,6 +239,7 @@ def match_stage1(
     tokens_L2R: Sequence[str],
     root: TrieNode,
     params: Params = Params(),
+    trace: Optional[Trace] = None,
 ) -> Dict[str, Any]:
     """
     Stage‑1 matcher: peel → exact/skip/fuzzy search with strict guards.
@@ -244,13 +247,13 @@ def match_stage1(
     Returns a structured result dict with `matched`, `uprn`, `cost`, and the
     peeled tokens used for matching.
     """
-    peeled = peel_end_tokens_with_trie(tokens_L2R, root, steps=4, max_k=2)
+    peeled = peel_end_tokens_with_trie(tokens_L2R, root, steps=4, max_k=2, trace=trace)
 
     # Reuse existing search; adapt to return cost by probing heap order would
     # require refactor. For now, run the same logic and infer cost via a tiny
     # local duplicate of acceptance logic. To keep changes surgical, we call the
     # existing function and set cost=None; we can upgrade to return cost in Step 10.
-    uprn, best_cost, _ = _search_with_skips(
+    uprn, best_cost, _, best_state, parents = _search_with_skips(
         peeled,
         root,
         max_cost=params.max_cost,
@@ -259,6 +262,7 @@ def match_stage1(
         numeric_must_be_exact=params.numeric_must_be_exact,
         skip_redundant_ratio=params.skip_redundant_ratio,
         accept_terminal_if_exhausted=params.accept_terminal_if_exhausted,
+        trace=trace,
     )
 
     return {
@@ -280,8 +284,9 @@ def _search_with_skips(
     numeric_must_be_exact: bool = True,
     skip_redundant_ratio: float = 2.0,
     accept_terminal_if_exhausted: bool = True,
-) -> Tuple[Optional[int], Optional[int], Optional[int]]:
-    """Internal search that returns (uprn, best_cost, runner_cost)."""
+    trace: Optional[Trace] = None,
+) -> Tuple[Optional[int], Optional[int], Optional[int], Optional[Tuple[int, int, int, bool, bool]], Optional[Dict[Tuple[int, int, int, bool, bool], Dict[str, Any]]]]:
+    """Internal search that returns (uprn, best_cost, runner_cost, best_state, parents)."""
     t = list(reversed([str(x) for x in tokens_L2R]))
     n = len(t)
 
@@ -310,6 +315,12 @@ def _search_with_skips(
             return 0
         return 1
 
+    # State & parents for tracing
+    StateKey = Tuple[int, int, int, bool, bool]
+    ParentMap = Dict[StateKey, Dict[str, Any]]
+
+    parents: ParentMap = {}
+
     heap: list[tuple[int, int, TrieNode, int, int, bool, bool]] = []
     seq = 0
     heapq.heappush(heap, (0, seq, root, 0, 0, False, False))
@@ -317,6 +328,7 @@ def _search_with_skips(
     best_uprn: Optional[int] = None
     runner_cost = float("inf")
     seen: dict[tuple[int, int, int, bool, bool], int] = {}
+    best_state: Optional[StateKey] = None
 
     while heap:
         cost, _, node, i, exact_hits, saw_num_any, saw_num_exact = heapq.heappop(heap)
@@ -334,6 +346,8 @@ def _search_with_skips(
                 runner_cost = best_cost
                 best_cost = cost
                 best_uprn = node.uprn
+                if trace is not None:
+                    best_state = (id(node), i, exact_hits, saw_num_any, saw_num_exact)
             elif node.uprn != best_uprn and cost < runner_cost:
                 runner_cost = cost
             if heap and heap[0][0] >= best_cost + 1:
@@ -359,6 +373,20 @@ def _search_with_skips(
                     saw_num_exact or is_numeric(tok),
                 ),
             )
+            if trace is not None:
+                cur_key: StateKey = (id(node), i, exact_hits, saw_num_any, saw_num_exact)
+                next_key: StateKey = (id(child), i + 1, exact_hits + 1, saw_num_any or is_numeric(tok), saw_num_exact or is_numeric(tok))
+                m_index = (n - 1) - i
+                ev = {
+                    "action": "EXACT_DESCEND",
+                    "messy": tok,
+                    "canon": tok,
+                    "m_index": m_index,
+                    "child_count": child.count,
+                }
+                prev = parents.get(next_key)
+                if prev is None or prev.get("g_cost", 1e9) > cost:
+                    parents[next_key] = {"parent": cur_key, "event": ev, "g_cost": cost}
 
         s_cost = skip_cost(node, tok)
         seq += 1
@@ -366,6 +394,16 @@ def _search_with_skips(
             heap,
             (cost + s_cost, seq, node, i + 1, exact_hits, saw_num_any, saw_num_exact),
         )
+        if trace is not None:
+            cur_key2: StateKey = (id(node), i, exact_hits, saw_num_any, saw_num_exact)
+            next_key2: StateKey = (id(node), i + 1, exact_hits, saw_num_any, saw_num_exact)
+            m_index2 = (n - 1) - i
+            ev2 = {"action": "SKIP_REDUNDANT" if s_cost == 0 else "SKIP_PENALIZED", "messy": tok, "m_index": m_index2}
+            if s_cost == 0:
+                ev2.update({"anchor_count": int(node.count), "child_count": int(node.child_count(tok))})
+            prev2 = parents.get(next_key2)
+            if prev2 is None or prev2.get("g_cost", 1e9) > cost + s_cost:
+                parents[next_key2] = {"parent": cur_key2, "event": ev2, "g_cost": cost + s_cost}
 
         if child is None:
             for lbl, ch in node.iter_children():
@@ -384,6 +422,21 @@ def _search_with_skips(
                             saw_num_exact,
                         ),
                     )
+                    if trace is not None:
+                        cur_key3: StateKey = (id(node), i, exact_hits, saw_num_any, saw_num_exact)
+                        next_key3: StateKey = (id(ch), i + 1, exact_hits, saw_num_any or is_numeric(lbl), saw_num_exact)
+                        m_index3 = (n - 1) - i
+                        # We'll emit a FUZZY_CONSUME later (Step 6+). For now we don't add to table.
+                        ev3 = {
+                            "action": "FUZZY_CONSUME",
+                            "messy": tok,
+                            "canon": lbl,
+                            "m_index": m_index3,
+                            "edit_type": etype,
+                        }
+                        prev3 = parents.get(next_key3)
+                        if prev3 is None or prev3.get("g_cost", 1e9) > cost + 1:
+                            parents[next_key3] = {"parent": cur_key3, "event": ev3, "g_cost": cost + 1}
 
     if (
         best_uprn is not None
@@ -394,5 +447,7 @@ def _search_with_skips(
             best_uprn,
             int(best_cost),
             (None if runner_cost == float("inf") else int(runner_cost)),
+            (best_state if trace is not None else None),
+            (parents if trace is not None else None),
         )
-    return None, None, None
+    return (None, None, None, None, None)

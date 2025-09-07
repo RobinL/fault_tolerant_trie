@@ -234,7 +234,7 @@ You should see the rightmost columns marked `⌫` / `peel`.
 
 ---
 
-## Step 3 — Add predecessor pointers (only when tracing) to `_search_with_skips`
+## Step 3 — Add predecessor pointers (only when tracing) to `_search_with_skips` [DONE]
 
 We need the **chosen best path** to emit `EXACT_DESCEND`, `SKIP_*`, `ACCEPT_*`.
 
