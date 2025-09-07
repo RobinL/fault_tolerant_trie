@@ -68,7 +68,7 @@ Below is a **step‑by‑step, implementation‑ready plan** for refactoring you
 
 ---
 
-## Step 4 — Implement `rule_exact` and switch to it
+## Step 4 — Implement `rule_exact` and switch to it [DONE]
 
 **File:** `matcher/matcher_stage1.py`
 

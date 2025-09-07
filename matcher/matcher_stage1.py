@@ -296,6 +296,40 @@ class RuleFunc(Protocol):
         ...
 
 
+def rule_exact(state: State, tokens_r2l: Sequence[str], n: int, params: "Params") -> Iterable[Move]:
+    """Yield an exact-consume Move if the next messy token matches a child.
+
+    Behavior preserved: cost 0, increments i and exact_hits, updates numeric flags
+    based on the messy token, and records child/anchor counts in the event.
+    """
+    if state.i >= n:
+        return
+    tok = tokens_r2l[state.i]
+    child = state.node.child(tok)
+    if child is None:
+        return
+    m_index = (n - 1) - state.i
+    ev = {
+        "action": "EXACT_DESCEND",
+        "messy": tok,
+        "canon": tok,
+        "m_index": m_index,
+        "child_count": child.count,
+        "anchor_count": int(state.node.count),
+    }
+    yield Move(
+        node=child,
+        i_delta=1,
+        exact_delta=1,
+        saw_num_any=(state.saw_num_any or is_numeric(tok)),
+        saw_num_exact=(state.saw_num_exact or is_numeric(tok)),
+        cost_delta=0,
+        event=ev,
+        last_consume_m_index=m_index,
+        last_canon_label=tok,
+    )
+
+
 def match_stage1(
     tokens_L2R: Sequence[str],
     root: TrieNode,
@@ -604,6 +638,16 @@ def _search_with_skips(
                         entry["last_canon_label"] = str(move.last_canon_label)
                 parents[next_key_l] = entry
 
+    # Build a params-like object to pass to rules
+    params_like = Params(
+        max_cost=max_cost,
+        min_exact_hits=min_exact_hits,
+        require_numeric=require_numeric,
+        numeric_must_be_exact=numeric_must_be_exact,
+        skip_redundant_ratio=skip_redundant_ratio,
+        accept_terminal_if_exhausted=accept_terminal_if_exhausted,
+    )
+
     while heap:
         cost, _, node, i, exact_hits, saw_num_any, saw_num_exact = heapq.heappop(heap)
         if cost > max_cost:
@@ -677,36 +721,18 @@ def _search_with_skips(
             continue
 
         tok = t[i]
-        child = node.child(tok)
-        if child is not None:
-            m_index = (n - 1) - i
-            ev = {
-                "action": "EXACT_DESCEND",
-                "messy": tok,
-                "canon": tok,
-                "m_index": m_index,
-                "child_count": child.count,
-                "anchor_count": int(node.count),
-            }
-            cur_state = State(
-                node=node,
-                i=i,
-                exact_hits=exact_hits,
-                saw_num_any=saw_num_any,
-                saw_num_exact=saw_num_exact,
-            )
-            move = Move(
-                node=child,
-                i_delta=1,
-                exact_delta=1,
-                saw_num_any=(saw_num_any or is_numeric(tok)),
-                saw_num_exact=(saw_num_exact or is_numeric(tok)),
-                cost_delta=0,
-                event=ev,
-                last_consume_m_index=m_index,
-                last_canon_label=tok,
-            )
+        # Exact via rule
+        cur_state = State(
+            node=node,
+            i=i,
+            exact_hits=exact_hits,
+            saw_num_any=saw_num_any,
+            saw_num_exact=saw_num_exact,
+        )
+        for move in rule_exact(cur_state, t, n, params_like):
             push_move(cur_state, cost, move)
+
+        child = node.child(tok)
 
         s_cost = _calc_skip_cost(node, tok, skip_redundant_ratio)
         seq += 1
