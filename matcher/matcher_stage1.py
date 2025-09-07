@@ -408,6 +408,21 @@ def match_stage1(
     }
 
 
+def match_address(
+    tokens: Sequence[str],
+    trie: TrieNode,
+    params: Params = Params(),
+) -> dict | None:
+    """
+    Thin wrapper returning a simple dict-or-None contract as promised in docs.
+
+    - On match: returns the full result dict from match_stage1.
+    - On no match: returns None.
+    """
+    res = match_stage1(tokens, trie, params)
+    return res if res.get("matched") else None
+
+
 def _search_with_skips(
     tokens_L2R: Sequence[str],
     root: TrieNode,

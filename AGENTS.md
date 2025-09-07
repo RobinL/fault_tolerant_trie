@@ -87,11 +87,26 @@ Data paths used by `get_data.py`:
 
 ## What to build (Stage-1 matcher)
 
-Extend  try.py to build a funciton:
+Two ways to call the matcher:
 
-```python
-match_address(tokens: list[str], trie) -> dict | None
-```
+- Simple wrapper:
+
+  ```python
+  match_address(tokens: list[str], trie) -> dict | None
+  ```
+
+  Returns a small dict on success (or None otherwise). This mirrors the doc’s
+  “dict or None” contract and is convenient for quick usage.
+
+- Rich result:
+
+  ```python
+  match_stage1(tokens: Sequence[str], root: TrieNode, params: Params) -> dict
+  ```
+
+  Returns a structured dict with `matched`, `uprn`, `cost`, `peeled_tokens`,
+  and `input_tokens` and supports optional tracing. Use this for debugging,
+  observability and fine-tuning thresholds.
 
 
 
