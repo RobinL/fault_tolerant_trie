@@ -630,6 +630,8 @@ def match_stage1(
             _, i_consumed, exact_hits, saw_any, saw_exact = best_state
             t_r2l = list(reversed(peeled))
             n = len(t_r2l)
+            # Numeric guard applies only if input contains any numeric token
+            need_numeric = bool(params.require_numeric and any(is_numeric(x) for x in t_r2l))
 
             def last_consumed_m_index() -> int:
                 return (n - 1) - (int(i_consumed) - 1) if int(i_consumed) > 0 else (n - 1 if n > 0 else 0)
@@ -657,7 +659,7 @@ def match_stage1(
                         "child_count": 0,
                     })
                 else:
-                    if params.require_numeric and not (saw_exact if params.numeric_must_be_exact else saw_any):
+                    if need_numeric and not (saw_exact if params.numeric_must_be_exact else saw_any):
                         ordered.append({
                             "action": "STOP_GUARD_NUMERIC",
                             "m_index": last_consumed_m_index(),
@@ -788,6 +790,9 @@ def _search_with_skips(
 
     # Debug/trace helpers removed
 
+    # Numeric guard applies only if input contains any numeric token
+    need_numeric = bool(require_numeric and any(is_numeric(x) for x in t))
+
     def accept(node: TrieNode, i: int, exact_hits: int, saw_num: bool) -> bool:
         if node.uprn is None:
             return False
@@ -797,7 +802,7 @@ def _search_with_skips(
             return False
         if exact_hits < min_exact_hits:
             return False
-        if require_numeric and not saw_num:
+        if need_numeric and not saw_num:
             return False
         return True
 
@@ -960,7 +965,7 @@ def _search_with_skips(
         # Optional unique-subtree acceptance (non-terminal unique & blocked)
         if accept_unique_subtree_if_blocked and node.uprn is None and int(node.count) == 1:
             blocked = (i >= n) or (not node.has_child(t[i]))
-            guards_ok = (exact_hits >= min_exact_hits) and (not require_numeric or (saw_num_exact if numeric_must_be_exact else saw_num_any))
+            guards_ok = (exact_hits >= min_exact_hits) and (not need_numeric or (saw_num_exact if numeric_must_be_exact else saw_num_any))
             if blocked and guards_ok:
                 unique_uprn: Optional[int] = None
                 try:

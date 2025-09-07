@@ -131,3 +131,38 @@ def get_address_data_from_messy_address(
         os_rel.show(max_width=20000)
 
     return input_rel.fetchone(), os_rel.fetchall()
+
+
+def show_uprns(
+    uprns,
+    os_parquet_path: str = OS_PARQUET,
+    connection: duckdb.DuckDBPyConnection | None = None,
+    *,
+    max_width: int = 20000,
+) -> None:
+    """Display OS fulladdress rows for the given UPRN list using DuckDB .show().
+
+    Example:
+        >>> show_uprns([2630107862])
+    """
+    try:
+        vals = [int(u) for u in (uprns or [])]
+    except Exception:
+        vals = []
+    if not vals:
+        print("(no UPRNs to show)")
+        return
+
+    con = connection or duckdb.connect(":default:")
+
+    def esc(s: str) -> str:
+        return s.replace("'", "''")
+
+    in_list = ",".join(str(u) for u in vals)
+    sql = f"""
+        SELECT uprn, fulladdress, postcode
+        FROM read_parquet('{esc(os_parquet_path)}')
+        WHERE uprn IN ({in_list})
+        ORDER BY uprn
+    """
+    con.sql(sql).show(max_width=max_width)

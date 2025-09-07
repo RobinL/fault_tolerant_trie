@@ -3,6 +3,7 @@ from matcher.get_data import (
     get_address_data_from_messy_address,
     get_random_address_data,
     OS_PARQUET,
+    show_uprns,
 )
 from matcher.trie_builder import build_trie_from_canonical
 from matcher.matcher_stage1 import (
@@ -83,14 +84,16 @@ def run_alignment(
         )
     )
     if "candidate_uprns" in res:
-        print(
-            f"  Candidate UPRNs (≤{res.get('limit_used')}): {res.get('candidate_uprns')}"
-        )
+        cands = res.get("candidate_uprns") or []
+        print(f"  Candidate UPRNs (≤{res.get('limit_used')}): {cands}")
+        if not res.get("matched") and cands:
+            print("\nCandidate UPRN details (from OS AddressBase):")
+            show_uprns(cands)
 
 
 # Use the messy tokens from FHRS row
 _uid, messy_tokens, _pc = messy_address
-params_swap = Params(allow_swap_adjacent=True)
+params_swap = Params(allow_swap_adjacent=True, accept_unique_subtree_if_blocked=True)
 
 addr_text = " ".join(messy_tokens)
 run_alignment(addr_text, params_override=params_swap)
