@@ -34,7 +34,9 @@ ICONS = {
 DASH = "—"
 
 
-def build_alignment_table(tokens_l2r: Sequence[str], events: List[Event]) -> Dict[str, List[str]]:
+def build_alignment_table(
+    tokens_l2r: Sequence[str], events: List[Event]
+) -> Dict[str, List[str]]:
     """
     Build a column-aligned table showing the alignment between messy tokens and
     canonical consumption actions. Orientation is R→L for display.
@@ -89,7 +91,11 @@ def build_alignment_table(tokens_l2r: Sequence[str], events: List[Event]) -> Dic
             cc = ev.get("child_count")
             ac = ev.get("anchor_count")
             if cc is not None:
-                set_if_empty(j, f"child_count={cc}" + (f", anchor_count={ac}" if ac is not None else ""))
+                set_if_empty(
+                    j,
+                    f"child_count={cc}"
+                    + (f", anchor_count={ac}" if ac is not None else ""),
+                )
         elif a == "FUZZY_CONSUME":
             j = col_from_m_index(int(ev["m_index"]))
             action[j] = ICONS["exact"]
@@ -106,9 +112,17 @@ def build_alignment_table(tokens_l2r: Sequence[str], events: List[Event]) -> Dic
             cc = ev.get("child_count")
             ratio = ev.get("ratio")
             thr = ev.get("threshold")
-            if ratio is not None and thr is not None and ac is not None and cc is not None:
+            if (
+                ratio is not None
+                and thr is not None
+                and ac is not None
+                and cc is not None
+            ):
                 cmp = "≥" if float(ratio) >= float(thr) else "<"
-                set_if_empty(j, f"ratio={ac}/{max(1,int(cc))}={float(ratio):.2f} {cmp} {float(thr)}")
+                set_if_empty(
+                    j,
+                    f"ratio={ac}/{max(1, int(cc))}={float(ratio):.2f} {cmp} {float(thr)}",
+                )
         elif a == "SKIP_PENALIZED":
             j = col_from_m_index(int(ev["m_index"]))
             action[j] = ICONS["dot"]
@@ -117,9 +131,17 @@ def build_alignment_table(tokens_l2r: Sequence[str], events: List[Event]) -> Dic
             cc = ev.get("child_count")
             ratio = ev.get("ratio")
             thr = ev.get("threshold")
-            if ratio is not None and thr is not None and ac is not None and cc is not None:
+            if (
+                ratio is not None
+                and thr is not None
+                and ac is not None
+                and cc is not None
+            ):
                 cmp = "≥" if float(ratio) >= float(thr) else "<"
-                set_if_empty(j, f"ratio={ac}/{max(1,int(cc))}={float(ratio):.2f} {cmp} {float(thr)}")
+                set_if_empty(
+                    j,
+                    f"ratio={ac}/{max(1, int(cc))}={float(ratio):.2f} {cmp} {float(thr)}",
+                )
         elif a and str(a).startswith("STOP_"):
             j = col_from_m_index(int(ev["m_index"]))
             action[j] = ICONS["stop"]
@@ -139,12 +161,15 @@ def build_alignment_table(tokens_l2r: Sequence[str], events: List[Event]) -> Dic
                 ac = ev.get("anchor_count")
                 set_if_empty(j, f"next '{tok}' not child (anchor_count={ac})")
             elif a == "STOP_GUARD_MIN_EXACT":
-                hits = ev.get("exact_hits"); need = ev.get("min_exact_hits")
+                hits = ev.get("exact_hits")
+                need = ev.get("min_exact_hits")
                 set_if_empty(j, f"hits={hits} < min_exact={need}")
             elif a == "STOP_GUARD_NUMERIC":
                 mex = ev.get("numeric_must_be_exact")
                 saw = ev.get("saw_num_exact" if mex else "saw_num_any")
-                set_if_empty(j, f"need numeric{' exact' if mex else ''}; seen={bool(saw)}")
+                set_if_empty(
+                    j, f"need numeric{' exact' if mex else ''}; seen={bool(saw)}"
+                )
             elif a == "STOP_AMBIGUOUS":
                 cnt = ev.get("node_count")
                 set_if_empty(j, f"count={cnt} (>1)")
@@ -162,10 +187,12 @@ def build_alignment_table(tokens_l2r: Sequence[str], events: List[Event]) -> Dic
                 canonical[j] = str(ev.get("accepted_label"))
             reason[j] = "unique leaf" if ev["action"] == "ACCEPT_UNIQUE" else "terminal"
             if ev.get("action") == "ACCEPT_UNIQUE":
-                cnt = ev.get("node_count"); nxt = ev.get("next_child_exists")
+                cnt = ev.get("node_count")
+                nxt = ev.get("next_child_exists")
                 set_if_empty(j, f"unique (count={cnt}, next_child={bool(nxt)})")
             else:
-                hits = ev.get("exact_hits"); saw = ev.get("saw_num_exact")
+                hits = ev.get("exact_hits")
+                saw = ev.get("saw_num_exact")
                 set_if_empty(j, f"terminal (hits={hits}, num_exact={bool(saw)})")
 
             # Mark post-accept tokens to the right in the R→L display (override reasons)
@@ -184,25 +211,59 @@ def build_alignment_table(tokens_l2r: Sequence[str], events: List[Event]) -> Dic
 
 
 def render_alignment_text(table: Dict[str, List[str]]) -> str:
-    rows = [
-        ("Messy (R→L):", table["messy_r2l"]),
-        ("Action:", table["action"]),
-        ("Canonical:", table["canonical"]),
-        ("Reason:", table["reason"]),
-    ]
-    if "condition" in table:
-        rows.append(("Condition:", table["condition"]))
+    """
+    Vertical alignment table: one row per token (R→L order).
+    Columns:
+      - idx (R→L): display column index 0..n-1, where 0 is the rightmost token
+      - messy      : messy token at that column
+      - action     : icon (✓, ✓★, ·, ⌫, ×)
+      - canonical  : canonical token aligned under the action (or —)
+      - reason     : short label (exact, fuzzy:*, peel, skip, redundant, post-accept, etc.)
+      - condition  : extra diagnostics (counts/ratios/guards), if present
+    """
+    messy = list(table.get("messy_r2l", []))
+    action = list(table.get("action", []))
+    canonical = list(table.get("canonical", []))
+    reason = list(table.get("reason", []))
+    condition = list(table.get("condition", []))
 
-    cols = len(table["messy_r2l"])
-    widths = [0] * cols
-    for _, values in rows:
-        for i, v in enumerate(values):
-            widths[i] = max(widths[i], len(str(v)))
+    n = len(messy)
+    headers = ["idx", "messy", "action", "canonical", "reason", "condition"]
+    rows: List[List[str]] = []
 
-    lines: List[str] = []
-    for label, values in rows:
-        parts = [label.ljust(13)]
-        for i, v in enumerate(values):
-            parts.append(str(v).rjust(widths[i] + 2))
-        lines.append("".join(parts))
-    return "\n".join(lines)
+    for i in range(n):
+        cond = condition[i] if i < len(condition) else ""
+        rows.append(
+            [
+                str(i),
+                str(messy[i]),
+                str(action[i]),
+                str(canonical[i]),
+                str(reason[i]),
+                str(cond),
+            ]
+        )
+
+    # compute column widths (support multi-line cells by using longest line)
+    widths = [len(h) for h in headers]
+    for r in rows:
+        for j, cell in enumerate(r):
+            longest = max((len(part) for part in str(cell).splitlines()), default=0)
+            widths[j] = max(widths[j], longest)
+
+    def fmt_row(r: List[str]) -> str:
+        parts: List[str] = []
+        for j, cell in enumerate(r):
+            text = str(cell)
+            if "\n" in text:
+                lines = text.splitlines()
+                parts.append("\n".join(s.ljust(widths[j]) for s in lines))
+            else:
+                parts.append(text.ljust(widths[j]))
+        return "  ".join(parts)
+
+    header = fmt_row(headers)
+    sep = "  ".join("-" * w for w in widths)
+    body = [fmt_row(r) for r in rows]
+
+    return "\n".join([header, sep] + body)
