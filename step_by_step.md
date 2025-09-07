@@ -16,15 +16,9 @@ Below is a **step‑by‑step, implementation‑ready plan** for refactoring you
 
 ---
 
-## Step 0 — Pre‑flight checkpoint
 
-**Action:** Commit current working tree. Run the full test suite to establish the baseline.
 
-**Verify:** All tests pass.
-
----
-
-## Step 1 — Introduce light “transition” types (no behavior change)
+## Step 1 — Introduce light “transition” types (no behavior change) [DONE]
 
 **File:** `matcher/matcher_stage1.py`
 

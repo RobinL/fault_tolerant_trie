@@ -278,6 +278,11 @@ def reconstruct_consumed_events(
     """Return consume events (EXACT_DESCEND/FUZZY_CONSUME) along best path.
 
     Returns empty list if tracing/state not available.
+
+    Example:
+        >>> parents = {}
+        >>> reconstruct_consumed_events(None, parents)
+        []
     """
     if best_state is None or parents is None:
         return []
@@ -302,6 +307,14 @@ def events_to_consumed_path(
     """Map consume events to (labels, counts) in L2R order.
 
     label = event["canon"], count = event.get("child_count").
+
+    Example:
+        >>> evs = [
+        ...   {"action":"EXACT_DESCEND","canon":"LOVE","child_count":7},
+        ...   {"action":"FUZZY_CONSUME","canon":"LANE","child_count":7},
+        ... ]
+        >>> events_to_consumed_path(evs)
+        (['LOVE', 'LANE'], [7, 7])
     """
     labels: List[str] = []
     counts: List[Optional[int]] = []
@@ -316,7 +329,12 @@ def final_node_from_state(
     best_state: Optional[Tuple[int, int, int, bool, bool]],
     parents: Optional[Dict[Tuple[int, int, int, bool, bool], Dict[str, Any]]],
 ):
-    """Return the TrieNode stored at best_state in parents, if present."""
+    """Return the TrieNode stored at best_state in parents, if present.
+
+    Example:
+        >>> final_node_from_state(None, None) is None
+        True
+    """
     if best_state is None or parents is None:
         return None
     info = parents.get(best_state)
@@ -329,6 +347,10 @@ def collect_uprns(node: Any, limit: int) -> List[int]:
     """Collect UPRNs under node up to the limit.
 
     If traversal exceeds `limit`, return [] to mean "too many".
+
+    Example:
+        >>> collect_uprns(None, 5)
+        []
     """
     if node is None or limit <= 0:
         return []

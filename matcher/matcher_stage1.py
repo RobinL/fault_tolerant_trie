@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Callable, List, Sequence, Optional, Dict, Any, Tuple
+from typing import Callable, List, Sequence, Optional, Dict, Any, Tuple, Iterable, Protocol
 import re
 
 from .trie_builder import TrieNode, count_tail_L2R
@@ -250,6 +250,50 @@ class Params:
     skip_redundant_ratio: float = 2.0
     accept_terminal_if_exhausted: bool = True
     max_uprns_to_return: int = 10
+
+
+# --- Step 1: Light transition types (no behavior change) ---
+
+@dataclass(frozen=True)
+class State:
+    """Immutable snapshot of the search state.
+
+    Fields mirror the tuple used in the heap/seen keys.
+    """
+    node: TrieNode
+    i: int
+    exact_hits: int
+    saw_num_any: bool
+    saw_num_exact: bool
+
+
+@dataclass(frozen=True)
+class Move:
+    """Proposed transition produced by a rule.
+
+    - node: target trie node after applying the move
+    - i_delta / exact_delta: increments to index and exact hit counters
+    - saw_num_any / saw_num_exact: updated numeric flags
+    - cost_delta: additional cost (0 or 1)
+    - event: trace event dict to record for this move
+    - last_consume_m_index / last_canon_label: optional hints to place accept star
+    """
+    node: TrieNode
+    i_delta: int
+    exact_delta: int
+    saw_num_any: bool
+    saw_num_exact: bool
+    cost_delta: int
+    event: Dict[str, Any]
+    last_consume_m_index: Optional[int] = None
+    last_canon_label: Optional[str] = None
+
+
+class RuleFunc(Protocol):
+    def __call__(
+        self, state: State, tokens_r2l: Sequence[str], n: int, params: "Params"
+    ) -> Iterable[Move]:
+        ...
 
 
 def match_stage1(
