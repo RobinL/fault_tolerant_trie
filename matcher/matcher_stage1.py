@@ -265,6 +265,42 @@ def match_stage1(
         trace=trace,
     )
 
+    # Step 4: if tracing is enabled, reconstruct the chosen path
+    if trace is not None and best_state is not None and parents is not None:
+        ordered: List[Dict[str, Any]] = []
+        cur = best_state
+        # Walk back through parents; stop when no entry is available
+        while cur in parents:
+            info = parents[cur]
+            ev = info.get("event")
+            if ev:
+                ordered.append(ev)
+            nxt = info.get("parent")
+            if nxt is None or nxt == cur:
+                break
+            cur = nxt
+        ordered.reverse()
+
+        # Ensure we have a terminal ACCEPT_* event; add ACCEPT_UNIQUE as fallback
+        if not ordered or not str(ordered[-1].get("action", "")).startswith("ACCEPT_"):
+            # Compute at_m_index from best_state's consumed index i
+            # StateKey = (node_id, i, exact_hits, any_num, exact_num)
+            _, i_consumed, _exact_hits, _any_num, _exact_num = best_state
+            n = len(peeled)
+            if int(i_consumed) > 0:
+                at_m_index = (n - 1) - (int(i_consumed) - 1)
+            else:
+                at_m_index = n - 1 if n > 0 else 0
+            if uprn is not None:
+                ordered.append({
+                    "action": "ACCEPT_UNIQUE",
+                    "uprn": int(uprn),
+                    "at_m_index": int(at_m_index),
+                })
+
+        for ev in ordered:
+            trace.add(ev)
+
     return {
         "matched": uprn is not None,
         "uprn": uprn,

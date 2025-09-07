@@ -282,7 +282,7 @@ def _search_with_skips(..., trace: Optional[Trace] = None
 
 ---
 
-## Step 4 — Reconstruct the chosen path (only if tracing)
+## Step 4 — Reconstruct the chosen path (only if tracing) [DONE]
 
 **File:** `matcher/matcher_stage1.py`, inside `match_stage1(...)`
 
