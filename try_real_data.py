@@ -41,11 +41,23 @@ for row in canonical_addresses:
     except Exception:
         pass
 
-# Default: enable token swap, canonical insertions, and unique-subtree acceptance
+# Default: permissive settings for exploration. Explicitly set all Params.
 params = Params(
-    allow_swap_adjacent=True,
-    allow_canonical_insert=True,
-    accept_unique_subtree_if_blocked=True,
+    max_cost=2,
+    min_exact_hits=1,  # more permissive (was 2)
+    require_numeric=False,  # more permissive: don’t require numbers
+    numeric_must_be_exact=False,  # irrelevant if require_numeric=False
+    skip_redundant_ratio=1.8,  # slightly lower threshold for 0-cost skip
+    accept_terminal_if_exhausted=True,
+    accept_unique_subtree_if_blocked=True,  # accept unique subtree when blocked
+    max_uprns_to_return=50,  # show more candidates on no-match
+    allow_swap_adjacent=True,  # enable adjacent token swap
+    swap_cost=1,
+    allow_canonical_insert=True,  # enable canonical insertions
+    canonical_insert_cost=1,
+    canonical_insert_allow_fuzzy=False,  # not implemented yet
+    canonical_insert_max_candidates=5,  # allow a few insert candidates
+    canonical_insert_disallow_numeric=False,  # allow numeric inserts if helpful
 )
 
 
@@ -57,7 +69,8 @@ def run_alignment(
     tokens = addr.split()
     trace = Trace(enabled=True)
     res = match_stage1(tokens, root, params_override or params, trace=trace)
-    print(res)
+    # Show params for transparency
+    print("Params:", params_override or params)
 
     # Main result: show messy vs canonical clearly at the top
     messy_line = " ".join(tokens)
