@@ -73,14 +73,20 @@ def run_alignment(
     # Also show consumed path summary and candidates via the convenience wrapper
     res2 = match_address(tokens, root, params_override or params)
     print("\nResult summary:")
-    print(f"  matched={res2.get('matched')} uprn={res2.get('uprn')} cost={res2.get('cost')}")
-    print(render_consumed_summary(
-        res2.get("consumed_path", []),
-        res2.get("consumed_path_counts", []),
-        res2.get("final_node_count"),
-    ))
+    print(
+        f"  matched={res2.get('matched')} uprn={res2.get('uprn')} cost={res2.get('cost')}"
+    )
+    print(
+        render_consumed_summary(
+            res2.get("consumed_path", []),
+            res2.get("consumed_path_counts", []),
+            res2.get("final_node_count"),
+        )
+    )
     if "candidate_uprns" in res2:
-        print(f"  Candidate UPRNs (≤{res2.get('limit_used')}): {res2.get('candidate_uprns')}")
+        print(
+            f"  Candidate UPRNs (≤{res2.get('limit_used')}): {res2.get('candidate_uprns')}"
+        )
 
 
 # Case 1: baseline success (unique leaf on 4)
@@ -135,3 +141,11 @@ print("\n" + "-" * 80 + "\n")
 # Case 9: redundant skip again explicitly
 addr9 = "700 LOVE LANE KINGS LANGLEY ENGLAND"
 run_alignment(addr9, title="Redundant skip: ANNEX before 7 (explicit repeat)")
+
+
+params_swap = Params(allow_swap_adjacent=True)
+run_alignment(
+    "4 LANE LOVE KINGS LANGLEY",
+    params_override=params_swap,
+    title="Swap adjacent: LANE↔LOVE (enabled)",
+)
