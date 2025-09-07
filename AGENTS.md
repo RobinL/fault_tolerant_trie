@@ -87,11 +87,26 @@ Data paths used by `get_data.py`:
 
 ## What to build (Stage-1 matcher)
 
-Extend  try.py to build a funciton:
+Two ways to call the matcher:
 
-```python
-match_address(tokens: list[str], trie) -> dict | None
-```
+- Simple wrapper:
+
+  ```python
+  match_address(tokens: list[str], trie) -> dict | None
+  ```
+
+  Returns a small dict on success (or None otherwise). This mirrors the doc’s
+  “dict or None” contract and is convenient for quick usage.
+
+- Rich result:
+
+  ```python
+  match_stage1(tokens: Sequence[str], root: TrieNode, params: Params) -> dict
+  ```
+
+  Returns a structured dict with `matched`, `uprn`, `cost`, `peeled_tokens`,
+  and `input_tokens` and supports optional tracing. Use this for debugging,
+  observability and fine-tuning thresholds.
 
 
 
@@ -104,31 +119,7 @@ match_address(tokens: list[str], trie) -> dict | None
 
 ---
 
+## Other important things to remember
 
-
-## Guardrails (do not relax)
-
-* **Never** return a match unless at a **unique UPRN**.
-* Keep edit budget **≤ 2** in Stage-1.
-* Require **numeric anchor** and **≥2 exact tokens** on accept.
-* If multiple candidates tie on cost → **reject** (send to Stage-2).
-* Do **not** add heavy global alignment/ML here (that’s Stage-2).
-
----
-
-## Data & privacy
-
-* Paths in `get_data.py` point to local files; **do not commit** data.
-* If you need to change paths, pass them as function parameters (don’t hard-code secrets).
-
----
-
-## Suggested next tasks for agents
-
-1. Implement `peel_end_tokens(...)` (from the prompt) as a utility.
-2. Implement `stage1_matcher.py` with the bounded costed walk (exact + tiny fuzzy + skip).
-3. Wire `try.py` to run `match_address(...)` and print the chosen UPRN (or “No match”).
-4. Add unit tests for the cases above.
-5. Keep thresholds configurable via a small `Params` dataclass.
-
----
+* If I ask you to follow step by step instructions in a markdown file, make sure that you update the instructions to tick off anything you've done, so we can keep track of done and still to do.
+* Often, to verify, it's a good idea to modify and run try.py to see if it outputs what you expect, in addition to running the test suite

@@ -3,54 +3,125 @@ from matcher.get_data import (
     get_address_data_from_messy_address,
     get_random_address_data,
     OS_PARQUET,
+    show_uprns,
+    show_postcode,
+    show_postcode_by_levenshtein,
 )
-from matcher.trie_builder import build_trie_from_canonical, print_trie
+from matcher.trie_builder import build_trie_from_canonical
 from matcher.matcher_stage1 import (
     match_stage1,
     Params,
 )
+from matcher.trace_utils import (
+    Trace,
+    build_alignment_table,
+    render_alignment_text,
+    render_consumed_summary,
+)
 
 
-messy_address, canonical_addresses = get_random_address_data(print_output=True)
+messy_address, canonical_addresses = get_random_address_data(print_output=False)
 
-# addr = "SUES NAILS 20 Essex Close Bletchley, Milton Keynes, UK"
-# pc = "MK3 7ET"
+# addr = "GARDEN KITCHEN HIGHFIELD LANE PRUDHOE NORTHUMBERLAND"
+# pc = "NE42 6EY"
 
 # messy_address, canonical_addresses = get_address_data_from_messy_address(
 #     addr, pc, print_output=False
 # )
 
 
-# --- Build suffix trie from canonical addresses for this postcode block ---
+# Build suffix trie from canonical rows for this postcode block
 root = build_trie_from_canonical(canonical_addresses, reverse=True)
-messy_address
+
+# Build uprn -> canonical tokens map for pretty printing
+uprn_to_tokens = {}
+for row in canonical_addresses:
+    try:
+        uprn = int(row[0])
+        toks = [str(t) for t in row[1]]
+        uprn_to_tokens[uprn] = toks
+    except Exception:
+        pass
+
+# Default: permissive settings for exploration. Explicitly set all Params.
+params = Params(
+    max_cost=2,
+    min_exact_hits=1,  # more permissive (was 2)
+    require_numeric=False,  # more permissive: don’t require numbers
+    numeric_must_be_exact=False,  # irrelevant if require_numeric=False
+    skip_redundant_ratio=1.8,  # slightly lower threshold for 0-cost skip
+    accept_terminal_if_exhausted=True,
+    accept_unique_subtree_if_blocked=True,  # accept unique subtree when blocked
+    max_uprns_to_return=50,  # show more candidates on no-match
+    allow_swap_adjacent=True,  # enable adjacent token swap
+    swap_cost=1,
+    allow_canonical_insert=True,  # enable canonical insertions
+    canonical_insert_cost=1,
+    canonical_insert_allow_fuzzy=False,  # not implemented yet
+    canonical_insert_max_candidates=5,  # allow a few insert candidates
+    canonical_insert_disallow_numeric=False,  # allow numeric inserts if helpful
+)
 
 
-def log(msg: str) -> None:
-    print(msg)
+def run_alignment(
+    addr: str, *, title: str | None = None, params_override: Params | None = None
+) -> None:
+    if title:
+        print(f"\n=== {title} ===\n")
+    tokens = addr.split()
+    trace = Trace(enabled=True)
+    res = match_stage1(tokens, root, params_override or params, trace=trace)
+    # Show params for transparency
+    print("Params:", params_override or params)
+
+    # Main result: show messy vs canonical clearly at the top
+    messy_line = " ".join(tokens)
+    if res.get("matched") and res.get("uprn") is not None:
+        canon_tokens = uprn_to_tokens.get(int(res["uprn"]))
+        canon_line = (
+            " ".join(canon_tokens) if canon_tokens else "(canonical tokens unavailable)"
+        )
+    else:
+        canon_line = "(no match)"
+    print("Messy:     ", messy_line)
+    print("Canonical: ", canon_line)
+    tbl = build_alignment_table(tokens, trace.events)
+    print(render_alignment_text(tbl))
+    print("\nResult summary:")
+    print(
+        f"  matched={res.get('matched')} uprn={res.get('uprn')} cost={res.get('cost')}"
+    )
+    print(
+        render_consumed_summary(
+            res.get("consumed_path", []),
+            res.get("consumed_path_counts", []),
+            res.get("final_node_count"),
+        )
+    )
+    cands = list(res.get("candidate_uprns") or [])
+    if cands:
+        print(f"  Candidate UPRNs (≤{res.get('limit_used')}): {cands}")
+    # If no match, show either candidate uprn details or whole postcode
+    if not res.get("matched"):
+        if cands:
+            print("\nCandidate UPRN details (from OS AddressBase):")
+            show_uprns(cands)
+        else:
+            try:
+                # Use postcode from the FHRS messy row loaded above
+                _uid, _tokens, pc = messy_address
+                print(
+                    f"\nAll addresses at postcode {pc} (ordered by Levenshtein to messy):"
+                )
+                df = show_postcode_by_levenshtein(messy_line, pc)
+                df.show()
+            except Exception:
+                pass
 
 
-# Extract the messy tokens from the input row and run Stage‑1 matcher
-messy_tokens = list(messy_address[1])
-print("\n=== Stage‑1 match on real data ===")
-print("Messy cleaned:", " ".join(messy_tokens) + " " + messy_address[2])
-res = match_stage1(messy_tokens, root, Params(), debug=False)
+# Use the messy tokens from FHRS row
+_uid, messy_tokens, _pc = messy_address
+params_swap = Params(allow_swap_adjacent=True, accept_unique_subtree_if_blocked=True)
 
-if res["matched"]:
-    print("Match:")
-    print(" ".join([a for a in canonical_addresses if a[0] == res["uprn"]][0][1]))
-else:
-    print("no match")
-
-# in_postcode = [c for c in canonical_addresses if c[2] == messy_address[2]]
-# [(a[0], " ".join(a[1])) for a in in_postcode]
-
-# import duckdb
-# ddbdf = duckdb.read_parquet(OS_PARQUET)
-# sql = f"""
-# select fulladdress
-# from ddbdf
-# where postcode = '{messy_address[2]}'
-# """
-# duckdb.sql(sql).show()
-# res
+addr_text = " ".join(messy_tokens)
+run_alignment(addr_text, params_override=params_swap)

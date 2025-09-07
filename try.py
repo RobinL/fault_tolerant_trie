@@ -1,10 +1,17 @@
-from matcher.trie_builder import build_trie_from_canonical, print_trie
+from matcher.trie_builder import build_trie_from_canonical, ascii_lines
 from matcher.matcher_stage1 import (
     peel_end_tokens_with_trie,
     match_stage1_exact_only,
     match_stage1_with_skips,
     match_stage1,
+    match_address,
     Params,
+)
+from matcher.trace_utils import (
+    Trace,
+    build_alignment_table,
+    render_alignment_text,
+    render_consumed_summary,
 )
 
 
@@ -31,13 +38,14 @@ canonical_love_lane = [
     (5, ["ANNEX", "7", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
     (6, ["6", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
     (7, ["4", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
+    (8, ["10", "LOVE", "LANE", "NORTH", "KINGS", "LANGLEY"], "WD4 9HW"),
+    (9, ["11", "LOVE", "LANE", "NORTH", "KINGS", "LANGLEY"], "WD4 9HW"),
+    (10, ["12", "LOVE", "LANE", "NORTH", "KINGS", "LANGLEY"], "WD4 9HW"),
+    (11, ["13", "LOVE", "LANE", "NORTH", "KINGS", "LANGLEY"], "WD4 9HW"),
 ]
 root = build_trie_from_canonical(canonical_love_lane, reverse=True)
 
-print("\n=== Step 1: Love Lane trie (sanity check) ===")
-print_trie(root)
-
-
+print(ascii_lines(root))
 # addr = "20 Essex Close Bletchley, Milton Keynes"
 # pc = "MK3 7ET"
 
@@ -49,74 +57,104 @@ print_trie(root)
 # )
 
 
-def log(msg: str) -> None:
-    print(msg)
-
-
-print("\n=== Step 2: Peeling demo ===")
-messy_str = "KIMS NAILS 4 LOVE LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND"
-print("Input:", messy_str)
-peeled = peel_end_tokens_with_trie(messy_str.split(), root, steps=4, max_k=2, debug=log)
-print("Peeled:", " ".join(peeled))
-
-
-print("\n=== Step 3: Exact walk demo (with trace) ===")
-for addr in [
-    "4 LOVE LANE KINGS LANGLEY",
-    "7 LOVE LANE KINGS LANGLEY",
-    "ANNEX 7 LOVE LANE KINGS LANGLEY",
-]:
-    print(f"\nInput: {addr}")
-    uprn = match_stage1_exact_only(addr.split(), root)
-    # Re-run with explicit exact trace to show steps
-    _ = match_stage1_exact_only(addr.split(), root)  # quiet
-    from matcher.matcher_stage1 import walk_exact
-
-    _ = walk_exact(addr.split(), root, accept_terminal_if_exhausted=True, debug=log)
-    print(f"Result UPRN: {uprn}")
-
-
-print("\n=== Step 5: Skips (search) demo with debug ===")
-for addr in [
-    "4 LOVE EXTRA LANE KINGS LANGLEY",  # inner noise → skip
-    "KIMS NAILS 4 LOVE LANE KINGS LANGLEY HERTFORDSHIRE",  # business + redundant county
-]:
-    print(f"\nInput: {addr}")
-    # Show peel step first
-    _ = peel_end_tokens_with_trie(addr.split(), root, steps=4, max_k=2, debug=log)
-    # Then run the skip-enabled matcher with a concise expansion trace
-    uprn = match_stage1_with_skips(addr.split(), root, debug=log)
-    print(f"Result UPRN: {uprn}")
-
-
-# --- Step 6: Fuzzy consume (DL≤1) demo ---
-print("\n=== Step 6: Fuzzy consume demo (DL≤1) ===")
-canonical_haydn = [
-    (1001, ["12", "HAYDN", "PARK", "ROAD"], "W12 3AB"),
-    (1002, ["10", "HAYDN", "PARK", "ROAD"], "W12 3AB"),
-]
-root_h = build_trie_from_canonical(canonical_haydn, reverse=True)
-for addr in [
-    "12 HADYN PARK ROAD",  # transposition: AD vs DA
-    "10 HAYEN PARK ROAD",  # substitution: DN vs EN
-    "HADYN PARK ROAD",  # no numeric → guard blocks
-]:
-    print(f"\nInput: {addr}")
-    res = match_stage1_with_skips(addr.split(), root_h, debug=log)
-    print(f"Result UPRN: {res}")
-
-
 # --- Step 7: Stage‑1 API (structured result) demo ---
-print("\n=== Step 7: Stage‑1 API demo (structured result) ===")
 params = Params()  # defaults: strict guards, numeric must be exact
 
-for addr in [
-    "15 LOVE LANE KINGS LANGLEY",
-    "7 LOVE LANE KINGS LANGLEY",
-    "KIMS NAILS 4 LOVE LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND",
-    "4 LOVE EXTRA LANE KINGS LANGLEY",
-    "4 LOVE LANE LANGLEY KINGS",
-]:
-    print(f"\nInput: {addr}")
-    result = match_stage1(addr.split(), root, params, debug=False)
-    print("Structured result:", result)
+
+def run_alignment(
+    addr: str, *, params_override: Params | None = None, title: str | None = None
+) -> None:
+    if title:
+        print(f"\n=== {title} ===\n")
+    tokens = addr.split()
+    trace = Trace(enabled=True)
+
+    # Then run matcher and show full alignment
+    res = match_stage1(tokens, root, params_override or params, trace=trace)
+    tbl = build_alignment_table(tokens, trace.events)
+    print()
+    print(render_alignment_text(tbl))
+    # Also show consumed path summary and candidates via the convenience wrapper
+    res2 = match_address(tokens, root, params_override or params)
+    print("\nResult summary:")
+    print(
+        f"  matched={res2.get('matched')} uprn={res2.get('uprn')} cost={res2.get('cost')}"
+    )
+    print(
+        render_consumed_summary(
+            res2.get("consumed_path", []),
+            res2.get("consumed_path_counts", []),
+            res2.get("final_node_count"),
+        )
+    )
+    if "candidate_uprns" in res2:
+        print(
+            f"  Candidate UPRNs (≤{res2.get('limit_used')}): {res2.get('candidate_uprns')}"
+        )
+
+
+# Case 1: baseline success (unique leaf on 4)
+addr1 = "KIMS NAILS 4 LOVE LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND"
+run_alignment(addr1, title="Success: unique leaf at 4")
+
+print("\n" + "-" * 80 + "\n")
+
+# Case 2: penalized skip (EXTRA between LOVE and LANE)
+addr2 = "KIMS NAILS 4 LOVE EXTRA LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND"
+run_alignment(addr2, title="Penalized skip: EXTRA between LOVE and LANE")
+
+print("\n" + "-" * 80 + "\n")
+
+# Case 3: terminal accept on 7
+addr3 = "KIMS NAILS 7 LOVE LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND"
+run_alignment(addr3, title="Terminal accept: exhausted at 7")
+
+print("\n" + "-" * 80 + "\n")
+
+# Case 4: redundant skip example using ANNEX (known child under 7)
+addr4 = "ANNEX 7 LOVE LANE KINGS LANGLEY"
+run_alignment(addr4, title="Redundant skip: ANNEX before 7 (known child)")
+
+print("\n" + "-" * 80 + "\n")
+
+# Case 5: stop with no child (unknown house number)
+addr5 = "KIMS NAILS 500 LOVE LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND"
+run_alignment(addr5, title="Stop: no child for 500 (no-child)")
+
+print("\n" + "-" * 80 + "\n")
+
+# Case 6: stop incomplete (no number present)
+addr6 = "KIMS NAILS LOVE LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND"
+run_alignment(addr6, title="Stop: incomplete (no terminal UPRN)")
+
+print("\n" + "-" * 80 + "\n")
+
+# Case 7: fuzzy consume (adjacent transpose KINSG → KINGS)
+addr7 = "KIMS NAILS 4 LOVE LANE KINSG LANGLEY HERTFORDSHIRE ENGLAND"
+run_alignment(addr7, title="Fuzzy: transpose KINSG → KINGS")
+
+print("\n" + "-" * 80 + "\n")
+
+# Case 8: skip after accept scenario (ANNEXE after 7)
+addr8 = "ANNEXE 7 LOVE LANE KINGS LANGLEY"
+run_alignment(addr8, title="Skip after accept: ANNEXE after 7 (star under 7)")
+
+
+print("\n" + "-" * 80 + "\n")
+
+# Case 9: redundant skip again explicitly
+addr9 = "700 LOVE LANE KINGS LANGLEY ENGLAND"
+run_alignment(addr9, title="Redundant skip: ANNEX before 7 (explicit repeat)")
+
+
+params_swap = Params(allow_swap_adjacent=True)
+run_alignment(
+    "4 LANE LOVE KINGS LANGLEY",
+    params_override=params_swap,
+    title="Swap adjacent: LANE↔LOVE (enabled)",
+)
+
+
+params_insert = Params(allow_canonical_insert=True)
+addr9 = "10 LOVE LANE KINGS LANGLEY"
+run_alignment(addr9, params_override=params_insert, title="Check canonical insert")

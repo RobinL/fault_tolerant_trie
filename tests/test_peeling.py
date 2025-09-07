@@ -1,21 +1,6 @@
 import pytest
-
-from matcher.trie_builder import build_trie_from_canonical, count_tail_L2R
+from matcher.trie_builder import count_tail_L2R
 from matcher.matcher_stage1 import peel_end_tokens_with_trie
-
-
-@pytest.fixture()
-def love_lane_root():
-    canonical_love_lane = [
-        (1, ["5", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
-        (2, ["9", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
-        (3, ["8", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
-        (4, ["7", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
-        (5, ["ANNEX", "7", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
-        (6, ["6", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
-        (7, ["4", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
-    ]
-    return build_trie_from_canonical(canonical_love_lane, reverse=True)
 
 
 def test_count_tail_wrapper(love_lane_root):

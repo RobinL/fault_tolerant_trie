@@ -131,10 +131,7 @@ def ascii_lines(node: TrieNode, prefix: str = "", sort: bool = True) -> List[str
     return lines
 
 
-def print_trie(node: TrieNode) -> None:
-    print("(root)")
-    for line in ascii_lines(node):
-        print(line)
+# Intentionally no printing function to keep library silent
 
 
 # --- wrappers for suffix count semantics (L2R to R2L) ---
