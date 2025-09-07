@@ -50,6 +50,6 @@ root = build_trie_from_canonical(canonical_love_lane, reverse=True)
 params = Params()  # defaults: strict guards, numeric must be exact
 
 
-addr = ("KIMS NAILS 4 LOVE LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND",)
+addr = "KIMS NAILS 4 LOVE LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND"
 
 _ = match_stage1(addr.split(), root, params)
