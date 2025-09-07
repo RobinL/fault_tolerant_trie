@@ -529,15 +529,7 @@ def _search_with_skips(
             return False
         return True
 
-    def skip_cost(node: TrieNode, tok: str) -> int:
-        c_anchor = int(node.count)
-        c_combo = int(node.child_count(tok))
-        # Only grant zero-cost if the token is a known child and clearly redundant
-        if c_combo > 0:
-            ratio = c_anchor / c_combo
-            if c_anchor > c_combo and ratio >= float(skip_redundant_ratio):
-                return 0
-        return 1
+    # skip_cost extracted to top-level _calc_skip_cost
 
     # State & parents for tracing
     StateKey = Tuple[int, int, int, bool, bool]
@@ -673,7 +665,7 @@ def _search_with_skips(
                     ev["anchor_count"] = int(node.count)
                     parents[next_key] = {"parent": cur_key, "event": ev, "g_cost": cost, "node": child}
 
-        s_cost = skip_cost(node, tok)
+        s_cost = _calc_skip_cost(node, tok, skip_redundant_ratio)
         seq += 1
         anchor_count_val = int(node.count)
         child_count_val = int(node.child_count(tok))
@@ -749,3 +741,16 @@ def _search_with_skips(
     if trace is not None and best_partial_key is not None:
         return (None, None, None, best_partial_key, parents)
     return (None, None, None, None, None)
+# --- Step 2: Extract skip-cost helper (behavior-preserving) ---
+def _calc_skip_cost(node: TrieNode, tok: str, skip_redundant_ratio: float) -> int:
+    """Return 0 for redundant skip only when tok is a known child and clearly redundant.
+
+    Otherwise return 1 (penalized).
+    """
+    c_anchor = int(node.count)
+    c_combo = int(node.child_count(tok))
+    if c_combo > 0:
+        ratio = c_anchor / c_combo
+        if c_anchor > c_combo and ratio >= float(skip_redundant_ratio):
+            return 0
+    return 1

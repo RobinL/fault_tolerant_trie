@@ -36,7 +36,7 @@ Below is a **step‑by‑step, implementation‑ready plan** for refactoring you
 
 ---
 
-## Step 2 — Extract `skip_cost` into a tiny helper (behavior‑preserving)
+## Step 2 — Extract `skip_cost` into a tiny helper (behavior‑preserving) [DONE]
 
 **File:** `matcher/matcher_stage1.py`
 
