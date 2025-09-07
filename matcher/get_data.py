@@ -166,3 +166,100 @@ def show_uprns(
         ORDER BY uprn
     """
     con.sql(sql).show(max_width=max_width)
+
+
+def show_postcode(
+    postcode: str,
+    os_parquet_path: str = OS_PARQUET,
+    connection: duckdb.DuckDBPyConnection | None = None,
+    *,
+    max_width: int = 20000,
+) -> None:
+    """Display all OS fulladdress rows for the given postcode.
+
+    Example:
+        >>> show_postcode("WD4 9HW")
+    """
+    pc = (postcode or "").strip()
+    if not pc:
+        print("(no postcode provided)")
+        return
+    con = connection or duckdb.connect(":default:")
+
+    def esc(s: str) -> str:
+        return s.replace("'", "''")
+
+    sql = f"""
+        SELECT uprn, fulladdress, postcode
+        FROM read_parquet('{esc(os_parquet_path)}')
+        WHERE postcode = '{esc(pc)}'
+        ORDER BY fulladdress
+    """
+    con.sql(sql).show(max_width=max_width)
+
+
+def show_postcode_by_levenshtein(
+    messy_text: str,
+    postcode: str,
+    os_parquet_path: str = OS_PARQUET,
+    connection: duckdb.DuckDBPyConnection | None = None,
+    *,
+    max_width: int = 20000,
+) -> None:
+    """Display all OS fulladdress rows for the given postcode, ordered by Levenshtein
+    distance to the provided messy_text, after applying the same simple cleaning
+    (uppercase, strip postcode, remove punctuation, collapse spaces).
+
+    Example:
+        >>> show_postcode_by_levenshtein("CORSBIE VILLA GUEST HOUSE CORSBIE ROAD NEWTON STEWART", "DG8 6JB")
+    """
+    pc = (postcode or "").strip()
+    if not pc:
+        print("(no postcode provided)")
+        return
+    txt = messy_text or ""
+    con = connection or duckdb.connect(":default:")
+
+    def esc(s: str) -> str:
+        return s.replace("'", "''")
+
+    # Clean messy text inline in SQL to mirror the address cleaning
+    sql = f"""
+        WITH src AS (
+            SELECT uprn, fulladdress, postcode
+            FROM read_parquet('{esc(os_parquet_path)}')
+            WHERE postcode = '{esc(pc)}'
+        ),
+        params AS (
+            SELECT '{esc(txt)}' AS messy_base
+        ),
+        cleaned AS (
+            SELECT
+                s.uprn,
+                s.fulladdress,
+                s.postcode,
+                -- Clean canonical: remove exact postcode text then normalize
+                (s.fulladdress{PC_REMOVE_TMPL_SQL.format(pc=esc(pc))}
+                    .upper()
+                    .regexp_replace('[,.'']', ' ', 'g')
+                    .regexp_replace('\\s+', ' ', 'g')
+                    .trim()
+                ) AS canon_clean,
+                -- Clean messy text similarly (from params CTE)
+                (p.messy_base
+                    .upper()
+                    .regexp_replace('[,.'']', ' ', 'g')
+                    .regexp_replace('\\s+', ' ', 'g')
+                    .trim()
+                ) AS messy_clean
+            FROM src s, params p
+        )
+        SELECT uprn, fulladdress, postcode,
+               levenshtein(messy_clean, canon_clean) AS dist,
+               messy_clean AS messy_norm,
+               canon_clean AS canon_norm
+        FROM cleaned
+        ORDER BY dist, fulladdress
+    """
+
+    con.sql(sql).show(max_width=max_width)

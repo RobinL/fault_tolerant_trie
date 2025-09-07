@@ -4,6 +4,8 @@ from matcher.get_data import (
     get_random_address_data,
     OS_PARQUET,
     show_uprns,
+    show_postcode,
+    show_postcode_by_levenshtein,
 )
 from matcher.trie_builder import build_trie_from_canonical
 from matcher.matcher_stage1 import (
@@ -20,8 +22,8 @@ from matcher.trace_utils import (
 
 messy_address, canonical_addresses = get_random_address_data(print_output=False)
 
-# addr = "SUES NAILS 20 Essex Close Bletchley, Milton Keynes, UK"
-# pc = "MK3 7ET"
+# addr = "GARDEN KITCHEN HIGHFIELD LANE PRUDHOE NORTHUMBERLAND"
+# pc = "NE42 6EY"
 
 # messy_address, canonical_addresses = get_address_data_from_messy_address(
 #     addr, pc, print_output=False
@@ -96,12 +98,25 @@ def run_alignment(
             res.get("final_node_count"),
         )
     )
-    if "candidate_uprns" in res:
-        cands = res.get("candidate_uprns") or []
+    cands = list(res.get("candidate_uprns") or [])
+    if cands:
         print(f"  Candidate UPRNs (≤{res.get('limit_used')}): {cands}")
-        if not res.get("matched") and cands:
+    # If no match, show either candidate uprn details or whole postcode
+    if not res.get("matched"):
+        if cands:
             print("\nCandidate UPRN details (from OS AddressBase):")
             show_uprns(cands)
+        else:
+            try:
+                # Use postcode from the FHRS messy row loaded above
+                _uid, _tokens, pc = messy_address
+                print(
+                    f"\nAll addresses at postcode {pc} (ordered by Levenshtein to messy):"
+                )
+                df = show_postcode_by_levenshtein(messy_line, pc)
+                df.show()
+            except Exception:
+                pass
 
 
 # Use the messy tokens from FHRS row
