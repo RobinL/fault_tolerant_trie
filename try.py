@@ -4,9 +4,15 @@ from matcher.matcher_stage1 import (
     match_stage1_exact_only,
     match_stage1_with_skips,
     match_stage1,
+    match_address,
     Params,
 )
-from matcher.trace_utils import Trace, build_alignment_table, render_alignment_text
+from matcher.trace_utils import (
+    Trace,
+    build_alignment_table,
+    render_alignment_text,
+    render_consumed_summary,
+)
 
 
 # messy_address, canonical_addresses = get_random_address_data(print_output=True)
@@ -60,11 +66,21 @@ def run_alignment(
     trace = Trace(enabled=True)
 
     # Then run matcher and show full alignment
-    _ = match_stage1(tokens, root, params_override or params, trace=trace)
-    print(_)
+    res = match_stage1(tokens, root, params_override or params, trace=trace)
     tbl = build_alignment_table(tokens, trace.events)
     print()
     print(render_alignment_text(tbl))
+    # Also show consumed path summary and candidates via the convenience wrapper
+    res2 = match_address(tokens, root, params_override or params)
+    print("\nResult summary:")
+    print(f"  matched={res2.get('matched')} uprn={res2.get('uprn')} cost={res2.get('cost')}")
+    print(render_consumed_summary(
+        res2.get("consumed_path", []),
+        res2.get("consumed_path_counts", []),
+        res2.get("final_node_count"),
+    ))
+    if "candidate_uprns" in res2:
+        print(f"  Candidate UPRNs (≤{res2.get('limit_used')}): {res2.get('candidate_uprns')}")
 
 
 # Case 1: baseline success (unique leaf on 4)

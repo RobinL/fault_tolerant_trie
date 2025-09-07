@@ -344,3 +344,27 @@ def collect_uprns(node: Any, limit: int) -> List[int]:
             stack.append(ch)
     out.sort()
     return out
+
+
+def render_consumed_summary(
+    consumed_path: Sequence[str],
+    counts: Sequence[Optional[int]],
+    final_count: Optional[int],
+) -> str:
+    """Return a two-line human-friendly summary of the consumed path.
+
+    Example:
+      Consumed path (L→R): LOVE → LANE → KINGS → LANGLEY
+      Counts along path:   7 → 7 → 7 → 7   | final=7
+    """
+    def _fmt_counts(v: Optional[int]) -> str:
+        return "?" if v is None else str(v)
+
+    labels = " → ".join(str(x) for x in consumed_path) if consumed_path else "(none)"
+    counts_str = (
+        " → ".join(_fmt_counts(v) for v in counts) if counts else "(none)"
+    )
+    final_str = "?" if final_count is None else str(final_count)
+    line1 = f"Consumed path (L→R): {labels}"
+    line2 = f"Counts along path:   {counts_str}   | final={final_str}"
+    return "\n".join([line1, line2])

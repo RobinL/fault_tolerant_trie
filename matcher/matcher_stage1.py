@@ -270,6 +270,8 @@ def match_stage1(
     # require refactor. For now, run the same logic and infer cost via a tiny
     # local duplicate of acceptance logic. To keep changes surgical, we call the
     # existing function and set cost=None; we can upgrade to return cost in Step 10.
+    # Use a local trace handle to enable parent-map reconstruction even if caller doesn't pass one
+    search_trace = trace if trace is not None else Trace(enabled=False)
     uprn, best_cost, _, best_state, parents = _search_with_skips(
         peeled,
         root,
@@ -279,7 +281,7 @@ def match_stage1(
         numeric_must_be_exact=params.numeric_must_be_exact,
         skip_redundant_ratio=params.skip_redundant_ratio,
         accept_terminal_if_exhausted=params.accept_terminal_if_exhausted,
-        trace=trace,
+        trace=search_trace,
     )
 
     # Reconstruct chosen path whenever we have a best_state (accept or partial)
@@ -405,6 +407,7 @@ def match_stage1(
         reconstruct_consumed_events,
         events_to_consumed_path,
         final_node_from_state,
+        collect_uprns,
     )
 
     consumed_events = reconstruct_consumed_events(best_state, parents)
@@ -425,6 +428,14 @@ def match_stage1(
         "consumed_path_counts": consumed_counts,
         "final_node_count": final_node_count,
     }
+    # Step 4: candidate enumeration on small no-match subtrees
+    if uprn is None and final_node is not None and final_node_count is not None:
+        limit = int(params.max_uprns_to_return)
+        if final_node_count <= limit:
+            cands = collect_uprns(final_node, limit)
+            if cands:
+                out["candidate_uprns"] = cands
+                out["limit_used"] = limit
     return out
 
 
@@ -432,15 +443,13 @@ def match_address(
     tokens: Sequence[str],
     trie: TrieNode,
     params: Params = Params(),
-) -> dict | None:
+) -> Dict[str, Any]:
     """
-    Thin wrapper returning a simple dict-or-None contract as promised in docs.
-
-    - On match: returns the full result dict from match_stage1.
-    - On no match: returns None.
+    Thin convenience wrapper around match_stage1 returning the full result dict
+    for both match and no-match cases. Pass a Params instance to tune knobs like
+    max_uprns_to_return (used for small-subtree candidate enumeration on no-match).
     """
-    res = match_stage1(tokens, trie, params)
-    return res if res.get("matched") else None
+    return match_stage1(tokens, trie, params)
 
 
 def _search_with_skips(
