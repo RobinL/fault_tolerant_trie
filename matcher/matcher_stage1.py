@@ -330,6 +330,40 @@ def rule_exact(state: State, tokens_r2l: Sequence[str], n: int, params: "Params"
     )
 
 
+def rule_skip(state: State, tokens_r2l: Sequence[str], n: int, params: "Params") -> Iterable[Move]:
+    """Yield a single skip Move (redundant or penalized) for the next messy token.
+
+    Behavior preserved: numeric flags unchanged; cost determined by _calc_skip_cost;
+    trace event includes anchor/child counts, ratio, and threshold.
+    """
+    if state.i >= n:
+        return
+    tok = tokens_r2l[state.i]
+    s_cost = _calc_skip_cost(state.node, tok, params.skip_redundant_ratio)
+    anchor_count = int(state.node.count)
+    child_count = int(state.node.child_count(tok))
+    ratio = anchor_count / max(1, child_count)
+    m_index = (n - 1) - state.i
+    ev = {
+        "action": "SKIP_REDUNDANT" if s_cost == 0 else "SKIP_PENALIZED",
+        "messy": tok,
+        "m_index": m_index,
+        "anchor_count": anchor_count,
+        "child_count": child_count,
+        "ratio": float(ratio),
+        "threshold": float(params.skip_redundant_ratio),
+    }
+    yield Move(
+        node=state.node,
+        i_delta=1,
+        exact_delta=0,
+        saw_num_any=state.saw_num_any,
+        saw_num_exact=state.saw_num_exact,
+        cost_delta=s_cost,
+        event=ev,
+    )
+
+
 def match_stage1(
     tokens_L2R: Sequence[str],
     root: TrieNode,
@@ -734,31 +768,8 @@ def _search_with_skips(
 
         child = node.child(tok)
 
-        s_cost = _calc_skip_cost(node, tok, skip_redundant_ratio)
-        seq += 1
-        anchor_count_val = int(node.count)
-        child_count_val = int(node.child_count(tok))
-        ratio_val = anchor_count_val / max(1, child_count_val)
-        heapq.heappush(
-            heap,
-            (cost + s_cost, seq, node, i + 1, exact_hits, saw_num_any, saw_num_exact),
-        )
-        if trace is not None:
-            cur_key2: StateKey = (id(node), i, exact_hits, saw_num_any, saw_num_exact)
-            next_key2: StateKey = (id(node), i + 1, exact_hits, saw_num_any, saw_num_exact)
-            m_index2 = (n - 1) - i
-            ev2 = {
-                "action": "SKIP_REDUNDANT" if s_cost == 0 else "SKIP_PENALIZED",
-                "messy": tok,
-                "m_index": m_index2,
-                "anchor_count": anchor_count_val,
-                "child_count": child_count_val,
-                "ratio": float(ratio_val),
-                "threshold": float(skip_redundant_ratio),
-            }
-            prev2 = parents.get(next_key2)
-            if prev2 is None or prev2.get("g_cost", 1e9) > cost + s_cost:
-                parents[next_key2] = {"parent": cur_key2, "event": ev2, "g_cost": cost + s_cost, "node": node}
+        for move in rule_skip(cur_state, t, n, params_like):
+            push_move(cur_state, cost, move)
 
         if child is None:
             for lbl, ch in node.iter_children():

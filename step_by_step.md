@@ -88,7 +88,7 @@ Below is a **step‑by‑step, implementation‑ready plan** for refactoring you
 
 ---
 
-## Step 5 — Implement `rule_skip` and switch to it
+## Step 5 — Implement `rule_skip` and switch to it [DONE]
 
 **File:** `matcher/matcher_stage1.py`
 
