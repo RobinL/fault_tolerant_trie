@@ -131,7 +131,7 @@ Below is a **step‑by‑step, implementation‑ready plan** for refactoring you
 
 ---
 
-## Step 7 — Centralize rule ordering (still behavior‑preserving)
+## Step 7 — Centralize rule ordering (still behavior‑preserving) [DONE]
 
 **File:** `matcher/matcher_stage1.py`
 

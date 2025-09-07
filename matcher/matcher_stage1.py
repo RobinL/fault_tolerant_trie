@@ -792,7 +792,7 @@ def _search_with_skips(
             continue
 
         tok = t[i]
-        # Exact via rule
+        # Build state and apply rules in fixed order: exact → skip → fuzzy
         cur_state = State(
             node=node,
             i=i,
@@ -800,17 +800,10 @@ def _search_with_skips(
             saw_num_any=saw_num_any,
             saw_num_exact=saw_num_exact,
         )
-        for move in rule_exact(cur_state, t, n, params_like):
-            push_move(cur_state, cost, move)
-
-        child = node.child(tok)
-
-        for move in rule_skip(cur_state, t, n, params_like):
-            push_move(cur_state, cost, move)
-
-        # Fuzzy via rule
-        for move in rule_fuzzy(cur_state, t, n, params_like):
-            push_move(cur_state, cost, move)
+        rules: List[RuleFunc] = [rule_exact, rule_skip, rule_fuzzy]
+        for rule in rules:
+            for move in rule(cur_state, t, n, params_like):
+                push_move(cur_state, cost, move)
 
     if (
         best_uprn is not None
