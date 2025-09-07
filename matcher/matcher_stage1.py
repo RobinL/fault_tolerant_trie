@@ -254,6 +254,12 @@ class Params:
     max_uprns_to_return: int = 10
     allow_swap_adjacent: bool = False
     swap_cost: int = 1
+    # Canonical insert (Stage-1: exact-only lookahead)
+    allow_canonical_insert: bool = True
+    canonical_insert_cost: int = 1
+    canonical_insert_allow_fuzzy: bool = False
+    canonical_insert_max_candidates: int = 3
+    canonical_insert_disallow_numeric: bool = True
 
 
 # --- Step 1: Light transition types (no behavior change) ---
@@ -403,6 +409,75 @@ def _rule_fuzzy(state: _State, tokens_r2l: Sequence[str], n: int, params: "Param
                 last_consume_m_index=m_index,
                 last_canon_label=lbl,
             )
+
+
+def _rule_canonical_insert(
+    state: _State, tokens_r2l: Sequence[str], n: int, params: "Params"
+) -> Iterable[_Move]:
+    """Insert one canonical token, then consume current messy token under it.
+
+    Preconditions:
+      - state.i < n
+      - No exact child for current messy token at this node
+      - Consider children X of current node such that X has a child Y whose
+        label equals the current messy token. If too many candidates, abort.
+
+    Move effects:
+      - Advance i by 1 (consumed messy token exactly at Y)
+      - exact_delta += 1
+      - cost += canonical_insert_cost
+      - Record a standard EXACT_DESCEND event with inserted_canonical metadata.
+    """
+    if state.i >= n:
+        return
+    tok = tokens_r2l[state.i]
+    # Only when stuck: do not fire if an exact child exists now
+    if state.node.child(tok) is not None:
+        return
+
+    # Gather viable (X_label, X_node, Y_node) candidates
+    candidates: List[Tuple[str, TrieNode, TrieNode]] = []
+    for x_label, x_node in state.node.iter_children():
+        if params.canonical_insert_disallow_numeric and is_numeric(x_label):
+            continue
+        # Conservative guard: do not insert a canonical token that already
+        # appears anywhere in the remaining messy/token stream (avoid reordering fixes)
+        if x_label in tokens_r2l:
+            continue
+        y = x_node.child(tok)
+        if y is not None:
+            candidates.append((x_label, x_node, y))
+
+    if not candidates:
+        return
+    if len(candidates) > int(params.canonical_insert_max_candidates):
+        # Abort if too many options at this anchor
+        return
+
+    m_index = (n - 1) - state.i
+    for x_label, x_node, y_node in candidates:
+        ev = {
+            "action": "EXACT_DESCEND",
+            "messy": tok,
+            "canon": tok,
+            "m_index": m_index,
+            "child_count": int(y_node.count),
+            # anchor_count reflects the inserted step (X)
+            "anchor_count": int(x_node.count),
+            # non-rendered metadata for observability
+            "inserted_canonical": x_label,
+        }
+        yield _Move(
+            node=y_node,
+            i_delta=1,
+            exact_delta=1,
+            saw_num_any=(state.saw_num_any or is_numeric(tok)),
+            saw_num_exact=(state.saw_num_exact or is_numeric(tok)),
+            cost_delta=int(params.canonical_insert_cost),
+            event=ev,
+            last_consume_m_index=m_index,
+            last_canon_label=tok,
+        )
 
 
 def _rule_swap_adjacent(state: _State, tokens_r2l: Sequence[str], n: int, params: "Params") -> Iterable[_Move]:
@@ -862,6 +937,8 @@ def _search_with_skips(
         if params_like.allow_swap_adjacent:
             rules.append(_rule_swap_adjacent)
         rules.extend([_rule_skip, _rule_fuzzy])
+        if params_like.allow_canonical_insert:
+            rules.append(_rule_canonical_insert)
         for rule in rules:
             for move in rule(cur_state, t, n, params_like):
                 push_move(cur_state, cost, move)

@@ -96,6 +96,13 @@ def build_alignment_table(
                     f"child_count={cc}"
                     + (f", anchor_count={ac}" if ac is not None else ""),
                 )
+            # Optionally show inserted canonical metadata without changing existing outputs
+            ins = ev.get("inserted_canonical")
+            if ins is not None:
+                if condition[j]:
+                    condition[j] = f"{condition[j]} | ins={ins}"
+                else:
+                    condition[j] = f"ins={ins}"
         elif a == "FUZZY_CONSUME":
             j = col_from_m_index(int(ev["m_index"]))
             action[j] = ICONS["exact"]
@@ -104,6 +111,12 @@ def build_alignment_table(
             reason[j] = f"fuzzy:{edit_type}" if edit_type else "fuzzy"
             if edit_type:
                 set_if_empty(j, f"edit={edit_type}")
+            ins = ev.get("inserted_canonical")
+            if ins is not None:
+                if condition[j]:
+                    condition[j] = f"{condition[j]} | ins={ins}"
+                else:
+                    condition[j] = f"ins={ins}"
         elif a == "SKIP_REDUNDANT":
             j = col_from_m_index(int(ev["m_index"]))
             action[j] = ICONS["dot"]
