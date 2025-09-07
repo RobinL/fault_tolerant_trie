@@ -281,22 +281,27 @@ def match_stage1(
             cur = nxt
         ordered.reverse()
 
-        # Ensure we have a terminal ACCEPT_* event; add ACCEPT_UNIQUE as fallback
+        # Ensure we have a terminal ACCEPT_* event
         if not ordered or not str(ordered[-1].get("action", "")).startswith("ACCEPT_"):
-            # Compute at_m_index from best_state's consumed index i
-            # StateKey = (node_id, i, exact_hits, any_num, exact_num)
-            _, i_consumed, _exact_hits, _any_num, _exact_num = best_state
-            n = len(peeled)
-            if int(i_consumed) > 0:
-                at_m_index = (n - 1) - (int(i_consumed) - 1)
+            # Prefer accept event captured during search, if available
+            acc_info = parents.get(best_state, {}) if parents is not None else {}
+            ev_acc = acc_info.get("accept_event")
+            if ev_acc is not None:
+                ordered.append(ev_acc)
             else:
-                at_m_index = n - 1 if n > 0 else 0
-            if uprn is not None:
-                ordered.append({
-                    "action": "ACCEPT_UNIQUE",
-                    "uprn": int(uprn),
-                    "at_m_index": int(at_m_index),
-                })
+                # Fallback to computing accept index and assume unique
+                _, i_consumed, _exact_hits, _any_num, _exact_num = best_state
+                n = len(peeled)
+                if int(i_consumed) > 0:
+                    at_m_index = (n - 1) - (int(i_consumed) - 1)
+                else:
+                    at_m_index = n - 1 if n > 0 else 0
+                if uprn is not None:
+                    ordered.append({
+                        "action": "ACCEPT_UNIQUE",
+                        "uprn": int(uprn),
+                        "at_m_index": int(at_m_index),
+                    })
 
         for ev in ordered:
             trace.add(ev)
@@ -378,6 +383,27 @@ def _search_with_skips(
 
         acc = accept(node, i, exact_hits, saw_num_exact if numeric_must_be_exact else saw_num_any)
         if acc:
+            if trace is not None:
+                # Determine accept flavor and mark accept event on this terminal state
+                unique_blocked = node.count == 1 and (i >= n or not node.has_child(t[i]))
+                exact_exhausted = accept_terminal_if_exhausted and i >= n
+                # Compute at_m_index: last consumed token if any, else rightmost
+                if i > 0:
+                    at_m_index = (n - 1) - (i - 1)
+                else:
+                    at_m_index = (n - 1) if n > 0 else 0
+                ev_acc = {
+                    "action": "ACCEPT_UNIQUE" if unique_blocked else "ACCEPT_TERMINAL",
+                    "uprn": int(node.uprn) if node.uprn is not None else None,
+                    "at_m_index": int(at_m_index),
+                }
+                cur_key_acc: StateKey = (id(node), i, exact_hits, saw_num_any, saw_num_exact)
+                # Preserve existing transition event; attach accept info alongside
+                info = parents.get(cur_key_acc)
+                if info is None:
+                    parents[cur_key_acc] = {"parent": None, "event": None, "accept_event": ev_acc}
+                else:
+                    info["accept_event"] = ev_acc
             if cost < best_cost:
                 runner_cost = best_cost
                 best_cost = cost

@@ -324,7 +324,7 @@ if trace is not None and best_state is not None and parents is not None:
 
 ---
 
-## Step 5 — Emit accept events with the correct flavor
+## Step 5 — Emit accept events with the correct flavor [DONE]
 
 **File:** `_search_with_skips` (accept logic)
 
