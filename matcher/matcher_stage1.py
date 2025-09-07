@@ -249,6 +249,7 @@ class Params:
     numeric_must_be_exact: bool = True
     skip_redundant_ratio: float = 2.0
     accept_terminal_if_exhausted: bool = True
+    max_uprns_to_return: int = 10
 
 
 def match_stage1(
@@ -399,13 +400,32 @@ def match_stage1(
         for ev in ordered:
             trace.add(ev)
 
-    return {
+    # Step 3: reconstruct consumed path and counts (post-processing)
+    from .trace_utils import (
+        reconstruct_consumed_events,
+        events_to_consumed_path,
+        final_node_from_state,
+    )
+
+    consumed_events = reconstruct_consumed_events(best_state, parents)
+    consumed_path, consumed_counts = events_to_consumed_path(consumed_events)
+    final_node = final_node_from_state(best_state, parents)
+    final_node_count = int(final_node.count) if final_node is not None else None
+
+    out: Dict[str, Any] = {
         "matched": uprn is not None,
         "uprn": uprn,
         "cost": best_cost,
+        # New preferred name
+        "search_tokens": peeled,
+        # Back-compat alias (TODO: remove in a future cleanup)
         "peeled_tokens": peeled,
         "input_tokens": list(tokens_L2R),
+        "consumed_path": consumed_path,
+        "consumed_path_counts": consumed_counts,
+        "final_node_count": final_node_count,
     }
+    return out
 
 
 def match_address(
@@ -654,6 +674,7 @@ def _search_with_skips(
                             "canon": lbl,
                             "m_index": m_index3,
                             "edit_type": etype,
+                            "child_count": ch.count,
                         }
                         prev3 = parents.get(next_key3)
                         if prev3 is None or prev3.get("g_cost", 1e9) > cost + 1:

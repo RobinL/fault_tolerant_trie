@@ -61,6 +61,7 @@ def run_alignment(
 
     # Then run matcher and show full alignment
     _ = match_stage1(tokens, root, params_override or params, trace=trace)
+    print(_)
     tbl = build_alignment_table(tokens, trace.events)
     print()
     print(render_alignment_text(tbl))
@@ -116,5 +117,5 @@ run_alignment(addr8, title="Skip after accept: ANNEXE after 7 (star under 7)")
 print("\n" + "-" * 80 + "\n")
 
 # Case 9: redundant skip again explicitly
-addr9 = "ANNEX 7 LOVE LANE KINGS LANGLEY"
+addr9 = "700 LOVE LANE KINGS LANGLEY ENGLAND"
 run_alignment(addr9, title="Redundant skip: ANNEX before 7 (explicit repeat)")

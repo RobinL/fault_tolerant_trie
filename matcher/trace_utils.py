@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 
 # Simple alias for trace events
@@ -267,3 +267,80 @@ def render_alignment_text(table: Dict[str, List[str]]) -> str:
     body = [fmt_row(r) for r in rows]
 
     return "\n".join([header, sep] + body)
+
+
+# --- Step 1 helpers: consumed path + final node + candidates ---
+
+def reconstruct_consumed_events(
+    best_state: Optional[Tuple[int, int, int, bool, bool]],
+    parents: Optional[Dict[Tuple[int, int, int, bool, bool], Dict[str, Any]]],
+) -> List[Event]:
+    """Return consume events (EXACT_DESCEND/FUZZY_CONSUME) along best path.
+
+    Returns empty list if tracing/state not available.
+    """
+    if best_state is None or parents is None:
+        return []
+    ordered: List[Event] = []
+    cur = best_state
+    while cur in parents:
+        info = parents[cur]
+        ev = info.get("event")
+        if ev and ev.get("action") in ("EXACT_DESCEND", "FUZZY_CONSUME"):
+            ordered.append(ev)
+        nxt = info.get("parent")
+        if nxt is None or nxt == cur:
+            break
+        cur = nxt
+    ordered.reverse()
+    return ordered
+
+
+def events_to_consumed_path(
+    consumed_events: Sequence[Event],
+) -> Tuple[List[str], List[Optional[int]]]:
+    """Map consume events to (labels, counts) in L2R order.
+
+    label = event["canon"], count = event.get("child_count").
+    """
+    labels: List[str] = []
+    counts: List[Optional[int]] = []
+    for ev in consumed_events:
+        labels.append(str(ev.get("canon", "")))
+        c = ev.get("child_count")
+        counts.append(int(c) if isinstance(c, int) else c if c is None else None)
+    return labels, counts
+
+
+def final_node_from_state(
+    best_state: Optional[Tuple[int, int, int, bool, bool]],
+    parents: Optional[Dict[Tuple[int, int, int, bool, bool], Dict[str, Any]]],
+):
+    """Return the TrieNode stored at best_state in parents, if present."""
+    if best_state is None or parents is None:
+        return None
+    info = parents.get(best_state)
+    if not info:
+        return None
+    return info.get("node")
+
+
+def collect_uprns(node: Any, limit: int) -> List[int]:
+    """Collect UPRNs under node up to the limit.
+
+    If traversal exceeds `limit`, return [] to mean "too many".
+    """
+    if node is None or limit <= 0:
+        return []
+    out: List[int] = []
+    stack = [node]
+    while stack:
+        cur = stack.pop()
+        if getattr(cur, "uprn", None) is not None:
+            out.append(int(cur.uprn))
+            if len(out) > limit:
+                return []
+        for _lbl, ch in getattr(cur, "children", {}).items():
+            stack.append(ch)
+    out.sort()
+    return out
