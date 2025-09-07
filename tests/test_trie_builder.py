@@ -1,24 +1,10 @@
 import pytest
-
 from matcher.trie_builder import (
     TrieNode,
     build_trie,
     build_trie_from_canonical,
 )
 
-
-@pytest.fixture()
-def love_lane_root():
-    canonical_love_lane = [
-        (1, ["5", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
-        (2, ["9", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
-        (3, ["8", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
-        (4, ["7", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
-        (5, ["ANNEX", "7", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
-        (6, ["6", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
-        (7, ["4", "LOVE", "LANE", "KINGS", "LANGLEY"], "WD4 9HW"),
-    ]
-    return build_trie_from_canonical(canonical_love_lane, reverse=True)
 
 
 def test_counts_and_uprns_for_canonical(love_lane_root: TrieNode):
