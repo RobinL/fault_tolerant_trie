@@ -51,21 +51,29 @@ root = build_trie_from_canonical(canonical_love_lane, reverse=True)
 params = Params()  # defaults: strict guards, numeric must be exact
 
 
-addr = "KIMS NAILS 4 LOVE LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND"
+def run_alignment(addr: str) -> None:
+    tokens = addr.split()
+    trace = Trace(enabled=True)
+
+    _ = match_stage1(tokens, root, params, trace=trace)
+    tbl = build_alignment_table(tokens, trace.events)
+    print()
+    print(render_alignment_text(tbl))
 
 
-addr = "500 LOVE LANE KINGS LANGLEY ENGLAND"
+# Case 1: baseline success (no EXTRA)
+addr1 = "KIMS NAILS 4 LOVE LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND"
+run_alignment(addr1)
 
-tokens = addr.split()
+print("\n" + "-" * 80 + "\n")
 
-# Step 2 verification: demonstrate PEEL_TAIL tracing
-trace = Trace(enabled=True)
-_peeled = peel_end_tokens_with_trie(tokens, root, steps=4, max_k=2, trace=trace)
-tbl = build_alignment_table(tokens, trace.events)
-print(render_alignment_text(tbl))
+# Case 2: with EXTRA (redundant skip)
+addr2 = "KIMS NAILS 4 LOVE EXTRA LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND"
+run_alignment(addr2)
 
-# Run Stage‑1 with tracing to add EXACT_DESCEND/ACCEPT events, then render again
-_ = match_stage1(tokens, root, params, trace=trace)
-tbl = build_alignment_table(tokens, trace.events)
-print()
-print(render_alignment_text(tbl))
+
+print("\n" + "-" * 80 + "\n")
+
+# Case 3: with EXTRA (redundant skip)
+addr2 = "500 LOVE EXTRA LANE KINGS LANGLEY HERTS ENGLAND"
+run_alignment(addr2)

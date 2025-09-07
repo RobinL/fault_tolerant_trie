@@ -375,7 +375,7 @@ if trace is not None:
 
 ---
 
-## Step 7 — Build and render the alignment table from the final path
+## Step 7 — Build and render the alignment table from the final path [DONE]
 
 **Files:** `try.py`
 
