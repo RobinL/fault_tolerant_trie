@@ -364,6 +364,43 @@ def rule_skip(state: State, tokens_r2l: Sequence[str], n: int, params: "Params")
     )
 
 
+def rule_fuzzy(state: State, tokens_r2l: Sequence[str], n: int, params: "Params") -> Iterable[Move]:
+    """Yield fuzzy-consume Moves when no exact child exists and DL<=1 applies.
+
+    Behavior preserved: cost 1; numeric flags update for saw_num_any using the
+    canonical label; saw_num_exact unchanged; event includes edit_type and child_count.
+    """
+    if state.i >= n:
+        return
+    tok = tokens_r2l[state.i]
+    # Only consider fuzzy when exact is absent
+    if state.node.child(tok) is not None:
+        return
+    for lbl, ch in state.node.iter_children():
+        etype = dl1_edit_type(tok, lbl)
+        if etype is not None and etype != "exact":
+            m_index = (n - 1) - state.i
+            ev = {
+                "action": "FUZZY_CONSUME",
+                "messy": tok,
+                "canon": lbl,
+                "m_index": m_index,
+                "edit_type": etype,
+                "child_count": ch.count,
+            }
+            yield Move(
+                node=ch,
+                i_delta=1,
+                exact_delta=0,
+                saw_num_any=(state.saw_num_any or is_numeric(lbl)),
+                saw_num_exact=state.saw_num_exact,
+                cost_delta=1,
+                event=ev,
+                last_consume_m_index=m_index,
+                last_canon_label=lbl,
+            )
+
+
 def match_stage1(
     tokens_L2R: Sequence[str],
     root: TrieNode,
@@ -771,39 +808,9 @@ def _search_with_skips(
         for move in rule_skip(cur_state, t, n, params_like):
             push_move(cur_state, cost, move)
 
-        if child is None:
-            for lbl, ch in node.iter_children():
-                etype = dl1_edit_type(tok, lbl)
-                if etype is not None and etype != "exact":
-                    seq += 1
-                    heapq.heappush(
-                        heap,
-                        (
-                            cost + 1,
-                            seq,
-                            ch,
-                            i + 1,
-                            exact_hits,
-                            saw_num_any or is_numeric(lbl),
-                            saw_num_exact,
-                        ),
-                    )
-                    if trace is not None:
-                        cur_key3: StateKey = (id(node), i, exact_hits, saw_num_any, saw_num_exact)
-                        next_key3: StateKey = (id(ch), i + 1, exact_hits, saw_num_any or is_numeric(lbl), saw_num_exact)
-                        m_index3 = (n - 1) - i
-                        # We'll emit a FUZZY_CONSUME later (Step 6+). For now we don't add to table.
-                        ev3 = {
-                            "action": "FUZZY_CONSUME",
-                            "messy": tok,
-                            "canon": lbl,
-                            "m_index": m_index3,
-                            "edit_type": etype,
-                            "child_count": ch.count,
-                        }
-                        prev3 = parents.get(next_key3)
-                        if prev3 is None or prev3.get("g_cost", 1e9) > cost + 1:
-                            parents[next_key3] = {"parent": cur_key3, "event": ev3, "g_cost": cost + 1, "node": ch}
+        # Fuzzy via rule
+        for move in rule_fuzzy(cur_state, t, n, params_like):
+            push_move(cur_state, cost, move)
 
     if (
         best_uprn is not None
