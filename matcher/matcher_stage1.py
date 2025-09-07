@@ -70,13 +70,29 @@ def peel_end_tokens_with_trie(
     def _count_tail(tail: Sequence[str]) -> int:
         return count_tail_L2R(root, tail)
 
+    original = list(tokens)
     peeled = peel_end_tokens(tokens, _count_tail, steps=steps, max_k=max_k)
     if trace is not None:
         trace.set_tokens(tokens)
         k = len(tokens) - len(peeled)
         if k > 0:
             removed = list(tokens[-k:])
-            trace.add({"action": "PEEL_TAIL", "removed_tokens": removed, "k": k})
+            # Recompute summary counts for observability (cheap and clear)
+            base_anchor = original[-1]
+            base_score = _count_tail([base_anchor])
+            best_anchor = original[-k - 1]
+            best_score = _count_tail([best_anchor])
+            trace.add(
+                {
+                    "action": "PEEL_TAIL",
+                    "removed_tokens": removed,
+                    "k": k,
+                    "base_anchor": base_anchor,
+                    "base_score": int(base_score),
+                    "best_anchor": best_anchor,
+                    "best_score": int(best_score),
+                }
+            )
     return peeled
 
 
