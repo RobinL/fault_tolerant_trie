@@ -16,7 +16,7 @@ def _build_love_lane_root():
     return build_trie_from_canonical(canonical_love_lane, reverse=True)
 
 
-def test_skip_redundant_extra_between_love_and_lane():
+def test_skip_penalized_extra_between_love_and_lane():
     root = _build_love_lane_root()
     tokens = "KIMS NAILS 4 LOVE EXTRA LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND".split()
     tr = Trace(enabled=True)
@@ -24,6 +24,6 @@ def test_skip_redundant_extra_between_love_and_lane():
 
     assert res["matched"] and res["uprn"] == 7
 
-    # Ensure we have a SKIP_REDUNDANT for the 'EXTRA' token
-    skips = [ev for ev in tr.events if ev.get("action") == "SKIP_REDUNDANT"]
-    assert any(ev.get("messy") == "EXTRA" for ev in skips), tr.events
+    # Ensure EXTRA is skipped but penalized (unknown child at this anchor)
+    skips = [ev for ev in tr.events if ev.get("action") in ("SKIP_REDUNDANT", "SKIP_PENALIZED")]
+    assert any(ev.get("messy") == "EXTRA" and ev.get("action") == "SKIP_PENALIZED" for ev in skips), tr.events

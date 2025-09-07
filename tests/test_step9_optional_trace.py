@@ -46,8 +46,8 @@ def test_trace_optional_and_noninvasive(capsys):
 
 def test_trace_optional_for_match_stage1_with_skips():
     root = _build_love_lane_root()
-    # With default params, this should accept 7 despite EXTRA
-    tokens = "KIMS NAILS 4 LOVE EXTRA LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND".split()
+    # With default params, this should accept 7 despite EXTRA (no tail tokens here)
+    tokens = "KIMS NAILS 4 LOVE EXTRA LANE KINGS LANGLEY".split()
     # No trace
     uprn_no_trace = match_stage1_with_skips(tokens, root)
     # With trace

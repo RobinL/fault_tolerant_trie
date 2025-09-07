@@ -60,7 +60,7 @@ def test_alignment_success_no_extra():
         assert reason[k] == "post-accept"
 
 
-def test_alignment_with_extra_redundant():
+def test_alignment_with_extra_penalized():
     root = _build_love_lane_root()
     addr = "KIMS NAILS 4 LOVE EXTRA LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND"
     tokens, tbl = _table_for(addr, root)
@@ -70,8 +70,8 @@ def test_alignment_with_extra_redundant():
     canon = tbl["canonical"]
     reason = tbl["reason"]
 
-    # EXTRA column should be a redundant skip (dot with reason 'redundant')
+    # EXTRA column should be a penalized skip (dot with reason 'skip')
     idx_extra = r2l.index("EXTRA")
     assert action[idx_extra] == "·"
-    assert reason[idx_extra] == "redundant"
+    assert reason[idx_extra] == "skip"
     assert canon[idx_extra] == "—"

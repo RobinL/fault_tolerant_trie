@@ -72,9 +72,9 @@ run_alignment(addr1, title="Success: unique leaf at 4")
 
 print("\n" + "-" * 80 + "\n")
 
-# Case 2: redundant skip (EXTRA between LOVE and LANE)
+# Case 2: penalized skip (EXTRA between LOVE and LANE)
 addr2 = "KIMS NAILS 4 LOVE EXTRA LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND"
-run_alignment(addr2, title="Redundant skip: EXTRA between LOVE and LANE")
+run_alignment(addr2, title="Penalized skip: EXTRA between LOVE and LANE")
 
 print("\n" + "-" * 80 + "\n")
 
@@ -84,14 +84,9 @@ run_alignment(addr3, title="Terminal accept: exhausted at 7")
 
 print("\n" + "-" * 80 + "\n")
 
-# Case 4: penalized skip by raising redundancy threshold → EXTRA counted as skip
-addr4 = "KIMS NAILS 4 LOVE EXTRA LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND"
-params_penalized = Params(skip_redundant_ratio=100.0)
-run_alignment(
-    addr4,
-    params_override=params_penalized,
-    title="Penalized skip: EXTRA counted as skip (not redundant)",
-)
+# Case 4: redundant skip example using ANNEX (known child under 7)
+addr4 = "ANNEX 7 LOVE LANE KINGS LANGLEY"
+run_alignment(addr4, title="Redundant skip: ANNEX before 7 (known child)")
 
 print("\n" + "-" * 80 + "\n")
 
@@ -118,5 +113,8 @@ addr8 = "ANNEXE 7 LOVE LANE KINGS LANGLEY"
 run_alignment(addr8, title="Skip after accept: ANNEXE after 7 (star under 7)")
 
 
+print("\n" + "-" * 80 + "\n")
+
+# Case 9: redundant skip again explicitly
 addr9 = "ANNEX 7 LOVE LANE KINGS LANGLEY"
-run_alignment(addr9)
+run_alignment(addr9, title="Redundant skip: ANNEX before 7 (explicit repeat)")

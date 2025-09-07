@@ -459,9 +459,11 @@ def _search_with_skips(
     def skip_cost(node: TrieNode, tok: str) -> int:
         c_anchor = int(node.count)
         c_combo = int(node.child_count(tok))
-        ratio = c_anchor / max(1, c_combo)
-        if c_anchor > c_combo and ratio >= float(skip_redundant_ratio):
-            return 0
+        # Only grant zero-cost if the token is a known child and clearly redundant
+        if c_combo > 0:
+            ratio = c_anchor / c_combo
+            if c_anchor > c_combo and ratio >= float(skip_redundant_ratio):
+                return 0
         return 1
 
     # State & parents for tracing
