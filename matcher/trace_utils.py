@@ -142,6 +142,18 @@ def build_alignment_table(
                     j,
                     f"ratio={ac}/{max(1, int(cc))}={float(ratio):.2f} {cmp} {float(thr)}",
                 )
+        elif a == "SWAP_ADJACENT":
+            j0 = col_from_m_index(int(ev["m_index0"]))
+            j1 = col_from_m_index(int(ev["m_index1"]))
+            canon_pair = ev.get("canon_pair", [DASH, DASH])
+            messy_pair = ev.get("messy_pair", ["?", "?"])
+            action[j0] = ICONS["exact"]
+            canonical[j0] = str(canon_pair[0])
+            reason[j0] = "swap"
+            action[j1] = ICONS["exact"]
+            canonical[j1] = str(canon_pair[1])
+            reason[j1] = "swap"
+            set_if_empty(j1, f"swap: {messy_pair[0]},{messy_pair[1]} → {canon_pair[0]},{canon_pair[1]}")
         elif a and str(a).startswith("STOP_"):
             j = col_from_m_index(int(ev["m_index"]))
             action[j] = ICONS["stop"]
@@ -319,9 +331,21 @@ def events_to_consumed_path(
     labels: List[str] = []
     counts: List[Optional[int]] = []
     for ev in consumed_events:
-        labels.append(str(ev.get("canon", "")))
-        c = ev.get("child_count")
-        counts.append(int(c) if isinstance(c, int) else c if c is None else None)
+        a = ev.get("action")
+        if a == "SWAP_ADJACENT":
+            cp = ev.get("canon_pair", [])
+            c1 = ev.get("child_count_after_first")
+            c2 = ev.get("child_count_after_second")
+            if len(cp) >= 1:
+                labels.append(str(cp[0]))
+                counts.append(int(c1) if isinstance(c1, int) else None)
+            if len(cp) >= 2:
+                labels.append(str(cp[1]))
+                counts.append(int(c2) if isinstance(c2, int) else None)
+        else:
+            labels.append(str(ev.get("canon", "")))
+            c = ev.get("child_count")
+            counts.append(int(c) if isinstance(c, int) else c if c is None else None)
     return labels, counts
 
 

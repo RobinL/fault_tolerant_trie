@@ -232,6 +232,8 @@ def match_stage1_with_skips(
         numeric_must_be_exact=numeric_must_be_exact,
         skip_redundant_ratio=skip_redundant_ratio,
         accept_terminal_if_exhausted=accept_terminal_if_exhausted,
+        allow_swap_adjacent=False,
+        swap_cost=1,
         trace=trace,
     )
     return uprn
@@ -250,6 +252,8 @@ class Params:
     skip_redundant_ratio: float = 2.0
     accept_terminal_if_exhausted: bool = True
     max_uprns_to_return: int = 10
+    allow_swap_adjacent: bool = False
+    swap_cost: int = 1
 
 
 # --- Step 1: Light transition types (no behavior change) ---
@@ -401,6 +405,54 @@ def _rule_fuzzy(state: _State, tokens_r2l: Sequence[str], n: int, params: "Param
             )
 
 
+def _rule_swap_adjacent(state: _State, tokens_r2l: Sequence[str], n: int, params: "Params") -> Iterable[_Move]:
+    """Swap two adjacent messy tokens if trie supports reversed canonical order.
+
+    Preconditions:
+      - exact at current position does not apply
+      - state.i + 1 < n
+      - node.child(tok1).child(tok0) exists
+    """
+    if not params.allow_swap_adjacent:
+        return
+    if state.i >= n - 1:
+        return
+    tok0 = tokens_r2l[state.i]
+    # Only consider swap if exact isn't available
+    if state.node.child(tok0) is not None:
+        return
+    tok1 = tokens_r2l[state.i + 1]
+    child1 = state.node.child(tok1)
+    if child1 is None:
+        return
+    child2 = child1.child(tok0)
+    if child2 is None:
+        return
+    m_index0 = (n - 1) - state.i
+    m_index1 = (n - 1) - (state.i + 1)
+    ev = {
+        "action": "SWAP_ADJACENT",
+        "messy_pair": [tok0, tok1],
+        "canon_pair": [tok1, tok0],
+        "m_index0": m_index0,
+        "m_index1": m_index1,
+        "anchor_count": int(state.node.count),
+        "child_count_after_first": int(child1.count),
+        "child_count_after_second": int(child2.count),
+    }
+    yield _Move(
+        node=child2,
+        i_delta=2,
+        exact_delta=2,
+        saw_num_any=(state.saw_num_any or is_numeric(tok0) or is_numeric(tok1)),
+        saw_num_exact=(state.saw_num_exact or is_numeric(tok0) or is_numeric(tok1)),
+        cost_delta=int(params.swap_cost),
+        event=ev,
+        last_consume_m_index=m_index1,
+        last_canon_label=tok0,
+    )
+
+
 def match_stage1(
     tokens_L2R: Sequence[str],
     root: TrieNode,
@@ -430,6 +482,8 @@ def match_stage1(
         numeric_must_be_exact=params.numeric_must_be_exact,
         skip_redundant_ratio=params.skip_redundant_ratio,
         accept_terminal_if_exhausted=params.accept_terminal_if_exhausted,
+        allow_swap_adjacent=params.allow_swap_adjacent,
+        swap_cost=params.swap_cost,
         trace=search_trace,
     )
 
@@ -611,6 +665,8 @@ def _search_with_skips(
     numeric_must_be_exact: bool = True,
     skip_redundant_ratio: float = 2.0,
     accept_terminal_if_exhausted: bool = True,
+    allow_swap_adjacent: bool = False,
+    swap_cost: int = 1,
     trace: Optional[Trace] = None,
 ) -> Tuple[Optional[int], Optional[int], Optional[int], Optional[Tuple[int, int, int, bool, bool]], Optional[Dict[Tuple[int, int, int, bool, bool], Dict[str, Any]]]]:
     """Internal search that returns (uprn, best_cost, runner_cost, best_state, parents)."""
@@ -702,7 +758,7 @@ def _search_with_skips(
                     "g_cost": new_cost,
                     "node": move.node,
                 }
-                if move.event.get("action") in ("EXACT_DESCEND", "FUZZY_CONSUME"):
+                if move.event.get("action") in ("EXACT_DESCEND", "FUZZY_CONSUME", "SWAP_ADJACENT"):
                     if move.last_consume_m_index is not None:
                         entry["last_consume_m_index"] = int(move.last_consume_m_index)
                     if move.last_canon_label is not None:
@@ -717,6 +773,8 @@ def _search_with_skips(
         numeric_must_be_exact=numeric_must_be_exact,
         skip_redundant_ratio=skip_redundant_ratio,
         accept_terminal_if_exhausted=accept_terminal_if_exhausted,
+        allow_swap_adjacent=allow_swap_adjacent,
+        swap_cost=swap_cost,
     )
 
     while heap:
@@ -800,7 +858,10 @@ def _search_with_skips(
             saw_num_any=saw_num_any,
             saw_num_exact=saw_num_exact,
         )
-        rules: List[_RuleFunc] = [_rule_exact, _rule_skip, _rule_fuzzy]
+        rules: List[_RuleFunc] = [_rule_exact]
+        if params_like.allow_swap_adjacent:
+            rules.append(_rule_swap_adjacent)
+        rules.extend([_rule_skip, _rule_fuzzy])
         for rule in rules:
             for move in rule(cur_state, t, n, params_like):
                 push_move(cur_state, cost, move)
