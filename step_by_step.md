@@ -144,7 +144,7 @@ Below is a **step‑by‑step, implementation‑ready plan** for refactoring you
 
 ---
 
-## Step 8 — Keep acceptance & star placement exactly as today
+## Step 8 — Keep acceptance & star placement exactly as today [DONE]
 
 **File:** `matcher/matcher_stage1.py`
 

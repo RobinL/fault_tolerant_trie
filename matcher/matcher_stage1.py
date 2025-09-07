@@ -255,7 +255,7 @@ class Params:
 # --- Step 1: Light transition types (no behavior change) ---
 
 @dataclass(frozen=True)
-class State:
+class _State:
     """Immutable snapshot of the search state.
 
     Fields mirror the tuple used in the heap/seen keys.
@@ -268,7 +268,7 @@ class State:
 
 
 @dataclass(frozen=True)
-class Move:
+class _Move:
     """Proposed transition produced by a rule.
 
     - node: target trie node after applying the move
@@ -289,14 +289,14 @@ class Move:
     last_canon_label: Optional[str] = None
 
 
-class RuleFunc(Protocol):
+class _RuleFunc(Protocol):
     def __call__(
-        self, state: State, tokens_r2l: Sequence[str], n: int, params: "Params"
-    ) -> Iterable[Move]:
+        self, state: _State, tokens_r2l: Sequence[str], n: int, params: "Params"
+    ) -> Iterable[_Move]:
         ...
 
 
-def rule_exact(state: State, tokens_r2l: Sequence[str], n: int, params: "Params") -> Iterable[Move]:
+def _rule_exact(state: _State, tokens_r2l: Sequence[str], n: int, params: "Params") -> Iterable[_Move]:
     """Yield an exact-consume Move if the next messy token matches a child.
 
     Behavior preserved: cost 0, increments i and exact_hits, updates numeric flags
@@ -317,7 +317,7 @@ def rule_exact(state: State, tokens_r2l: Sequence[str], n: int, params: "Params"
         "child_count": child.count,
         "anchor_count": int(state.node.count),
     }
-    yield Move(
+    yield _Move(
         node=child,
         i_delta=1,
         exact_delta=1,
@@ -330,7 +330,7 @@ def rule_exact(state: State, tokens_r2l: Sequence[str], n: int, params: "Params"
     )
 
 
-def rule_skip(state: State, tokens_r2l: Sequence[str], n: int, params: "Params") -> Iterable[Move]:
+def _rule_skip(state: _State, tokens_r2l: Sequence[str], n: int, params: "Params") -> Iterable[_Move]:
     """Yield a single skip Move (redundant or penalized) for the next messy token.
 
     Behavior preserved: numeric flags unchanged; cost determined by _calc_skip_cost;
@@ -353,7 +353,7 @@ def rule_skip(state: State, tokens_r2l: Sequence[str], n: int, params: "Params")
         "ratio": float(ratio),
         "threshold": float(params.skip_redundant_ratio),
     }
-    yield Move(
+    yield _Move(
         node=state.node,
         i_delta=1,
         exact_delta=0,
@@ -364,7 +364,7 @@ def rule_skip(state: State, tokens_r2l: Sequence[str], n: int, params: "Params")
     )
 
 
-def rule_fuzzy(state: State, tokens_r2l: Sequence[str], n: int, params: "Params") -> Iterable[Move]:
+def _rule_fuzzy(state: _State, tokens_r2l: Sequence[str], n: int, params: "Params") -> Iterable[_Move]:
     """Yield fuzzy-consume Moves when no exact child exists and DL<=1 applies.
 
     Behavior preserved: cost 1; numeric flags update for saw_num_any using the
@@ -388,7 +388,7 @@ def rule_fuzzy(state: State, tokens_r2l: Sequence[str], n: int, params: "Params"
                 "edit_type": etype,
                 "child_count": ch.count,
             }
-            yield Move(
+            yield _Move(
                 node=ch,
                 i_delta=1,
                 exact_delta=0,
@@ -667,7 +667,7 @@ def _search_with_skips(
         return c_i > b_i
 
     # Step 3: local push helper for moves
-    def push_move(cur_state: State, base_cost: int, move: Move) -> None:
+    def push_move(cur_state: _State, base_cost: int, move: _Move) -> None:
         nonlocal seq
         new_cost = base_cost + int(move.cost_delta)
         new_i = cur_state.i + int(move.i_delta)
@@ -793,14 +793,14 @@ def _search_with_skips(
 
         tok = t[i]
         # Build state and apply rules in fixed order: exact → skip → fuzzy
-        cur_state = State(
+        cur_state = _State(
             node=node,
             i=i,
             exact_hits=exact_hits,
             saw_num_any=saw_num_any,
             saw_num_exact=saw_num_exact,
         )
-        rules: List[RuleFunc] = [rule_exact, rule_skip, rule_fuzzy]
+        rules: List[_RuleFunc] = [_rule_exact, _rule_skip, _rule_fuzzy]
         for rule in rules:
             for move in rule(cur_state, t, n, params_like):
                 push_move(cur_state, cost, move)
