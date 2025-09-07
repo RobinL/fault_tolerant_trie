@@ -347,7 +347,7 @@ if trace is not None and best_state is not None and parents is not None:
 
 ---
 
-## Step 6 — Add `SKIP_REDUNDANT` / `SKIP_PENALIZED` transitions into the parent map
+## Step 6 — Add `SKIP_REDUNDANT` / `SKIP_PENALIZED` transitions into the parent map [DONE]
 
 **File:** `_search_with_skips`
 
