@@ -104,6 +104,7 @@ match_address(tokens: list[str], trie) -> dict | None
 
 ---
 
-## Other things to remember
+## Other important things to remember
 
 * If I ask you to follow step by step instructions in a markdown file, make sure that you update the instructions to tick off anything you've done, so we can keep track of done and still to do.
+* Often, to verify, it's a good idea to modify and run try.py to see if it outputs what you expect, in addition to running the test suite

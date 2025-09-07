@@ -4,6 +4,7 @@ from typing import Callable, List, Sequence, Optional, Dict, Any, Tuple
 import re
 
 from .trie_builder import TrieNode, count_tail_L2R
+from .trace_utils import Trace
 
 
 def peel_end_tokens(
@@ -62,13 +63,21 @@ def peel_end_tokens_with_trie(
     root: TrieNode,
     steps: int = 4,
     max_k: int = 2,
+    trace: Optional[Trace] = None,
 ) -> List[str]:
     """Thin wrapper wiring peel_end_tokens to the trie count helper."""
 
     def _count_tail(tail: Sequence[str]) -> int:
         return count_tail_L2R(root, tail)
 
-    return peel_end_tokens(tokens, _count_tail, steps=steps, max_k=max_k)
+    peeled = peel_end_tokens(tokens, _count_tail, steps=steps, max_k=max_k)
+    if trace is not None:
+        trace.set_tokens(tokens)
+        k = len(tokens) - len(peeled)
+        if k > 0:
+            removed = list(tokens[-k:])
+            trace.add({"action": "PEEL_TAIL", "removed_tokens": removed, "k": k})
+    return peeled
 
 
 def walk_exact(

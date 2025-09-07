@@ -6,6 +6,7 @@ from matcher.matcher_stage1 import (
     match_stage1,
     Params,
 )
+from matcher.trace_utils import Trace, build_alignment_table, render_alignment_text
 
 
 # messy_address, canonical_addresses = get_random_address_data(print_output=True)
@@ -52,4 +53,13 @@ params = Params()  # defaults: strict guards, numeric must be exact
 
 addr = "KIMS NAILS 4 LOVE LANE KINGS LANGLEY HERTFORDSHIRE ENGLAND"
 
-_ = match_stage1(addr.split(), root, params)
+tokens = addr.split()
+
+# Step 2 verification: demonstrate PEEL_TAIL tracing
+trace = Trace(enabled=True)
+_peeled = peel_end_tokens_with_trie(tokens, root, steps=4, max_k=2, trace=trace)
+tbl = build_alignment_table(tokens, trace.events)
+print(render_alignment_text(tbl))
+
+# Existing demo of Stage‑1 API (unchanged behavior)
+_ = match_stage1(tokens, root, params)

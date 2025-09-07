@@ -42,7 +42,7 @@ We will emit only the events needed to produce the table above:
 
 ---
 
-## Step 0 — Create the tracing module (new file, no behavior change)
+## Step 0 — Create the tracing module (new file, no behavior change) [DONE]
 
 **File:** `matcher/trace_utils.py`
 
@@ -203,7 +203,7 @@ Return type of `_search_with_skips` will soon include a **best state handle** to
 
 ---
 
-## Step 2 — Emit `PEEL_TAIL` from peeling
+## Step 2 — Emit `PEEL_TAIL` from peeling [DONE]
 
 **File:** `matcher/matcher_stage1.py`
 
