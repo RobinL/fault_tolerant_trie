@@ -2,6 +2,50 @@
 
 A prototype of a Stage‑1 UK address matcher built around a right‑to‑left suffix trie. The matcher consumes cleaned address tokens and returns a Unique Property Reference Number (UPRN) when a precise match is found under a small edit tolerance. The design emphasises correctness and clarity over performance and mirrors the logic destined for a future C++ implementation.
 
+This diagram illustatrates the operation:
+
+Given a trie:
+
+```
+-- BLETCHLEY (count=256)
+    |-- CLOSE (count=153)
+    |   |-- CARDIGAN (count=20)
+    |   |   |-- 1 (count=1, uprn=a)
+    |   |   |   ...
+    |   |-- CUMBRIA (count=25)
+    |   |   |-- 13 (count=1, uprn=b)
+    |   |   |-- ...
+    |   |   `-- HOUSE (count=13)
+    |   |       `-- LANARK (count=13, uprn=c)
+    |   |           |-- 1 (count=1, uprn=d)
+    |   |           ...
+    |   |-- ESSEX (count=31)
+    |   |   ...
+    |   |   |-- 20 (count=1, uprn=e)
+
+```
+
+```
+Messy:      SUES NAILS 20 ESSEX CLOS NORTH BLETCHLEY MILTON KEYNES
+Canonical:  20 ESSEX CLOSE BLETCHLEY
+idx  messy      action  canonical  reason        condition                        
+---  ---------  ------  ---------  ------------  ---------------------------------
+0    KEYNES     ⌫       —          peel          KEYNES:0→BLETCHLEY:256 (k=2)     
+1    MILTON     ⌫       —          peel                                           
+2    BLETCHLEY  ✓       BLETCHLEY  exact         child_count=256, anchor_count=256
+3    NORTH      ·       —          skip          ratio=256/1=256.00 ≥ 2.0         
+4    CLOS       ✓       CLOSE      fuzzy:insert  edit=insert                      
+5    ESSEX      ✓       ESSEX      exact         child_count=31, anchor_count=153 
+6    20         ✓★      20         unique leaf   child_count=1, anchor_count=31   
+7    NAILS      ·       —          post-accept                                    
+8    SUES       ·       —          post-accept                                    
+
+Result summary:
+  matched=True uprn=25038431 cost=2
+Consumed path (L→R): BLETCHLEY → CLOSE → ESSEX → 20
+Counts along path:   256 → 153 → 31 → 1   | final=1
+```
+
 ## Repository structure
 
 - `matcher/trie_builder.py` – dataclass-based suffix trie with insert/count helpers and utilities for building tries from canonical addresses and rendering ASCII views.
